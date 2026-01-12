@@ -1,0 +1,124 @@
+{
+  "appName": "lenjo",
+  "login": {
+    "title": "di'a se jaspu",
+    "usernameLabel": "cmene",
+    "usernamePlaceholder": "ciska le cmene be do",
+    "passwordLabel": "japyvla",
+    "passwordPlaceholder": "ciska le do japyvla",
+    "button": "jmina",
+    "authenticating": "sei ca'o gunka",
+    "forgotPassword": "xu na morji fi le do japyvla",
+    "noAccount": "co'a se jaspu",
+    "signUpLink": "jmina"
+  },
+  "signup": {
+    "title": "jmina",
+    "usernameLabel": "cmene",
+    "emailLabel": "emledi",
+    "passwordLabel": "japyvla",
+    "button": "finti le te jmina",
+    "creating": "finti...",
+    "haveAccount": "ponse le te jmina?",
+    "logInLink": "jmina"
+  },
+  "searchForm": {
+    "dictionary": "valste & biskop",
+    "semantic": "smuni sisku",
+    "comments": "nu tavla",
+    "messages": "datnyve'u",
+    "muplis": "mupli jufra",
+    "groupByThread": "gunma lo se casnu"
+  },
+  "home": {
+    "trendingComments": "nu tavla poi fadni",
+    "recentChanges": "cnino nu galfi",
+    "searchResultsTitle": {
+      "dictionary": "valste & biskop",
+      "semantic": "smuni sisku",
+      "muplis": "mupli jufra",
+      "comments": "nu tavla",
+      "messages": "datnyve'u"
+    },
+    "addDefinition": "valsi",
+    "newFreeThread": "cnino nu tavla"
+  },
+  "sort": {
+    "time": "Sort by Time",
+    "reactions": "Sort by Reactions",
+    "replies": "Sort by Replies",
+    "relevance": "Sort by Relevance",
+    "date": "Sort by Date",
+    "subject": "Sort by Subject",
+    "sender": "Sort by Sender"
+  },
+  "comments": {
+    "notFound": "No comments found matching your search"
+  },
+  "footer": {
+    "liveChat": "casnu",
+    "chatSettings": "casnu se jicmu",
+    "marqueeToggle": "casnu muvdu",
+    "recentMessages": "nu cusku nuzba",
+    "noRecentMessages": "no nu cusku nuzba"
+  },
+  "testDataWarning": ".i lo datni cu snada .i lo platu cu fliba .i lo spuda cu facki fi'o",
+  "discord": "Discord",
+  "toggleMenu": ".i menli",
+  "logoText": "lenjo",
+  "nav": {
+    "courses": "karda",
+    "recent": "nuzba",
+    "more": "li'o",
+    "users": "lo'i pilno",
+    "languages": "lo'i bangu",
+    "cachedExports": "ba'o se cupra",
+    "export": "cupra",
+    "bulkImport": "jmina so'i da",
+    "manageRoles": "jitro lo pikta",
+    "myActivity": "mi gasnu",
+    "logout": "de'a se jaspu",
+    "signUp": "co'a se jaspu",
+    "logIn": "di'a se jaspu"
+  },
+  "mobileNav": {
+    "recentChanges": "cnino fasnu"
+  },
+  "fab": {
+    "addDefinition": "jmina fi lo liste",
+    "newDiscussion": "casnu lo cnino"
+  },
+  "collectionDetail": {
+    "public": "javni",
+    "private": "jarco",
+    "createdBy": "se finti la",
+    "quizTab": "sidju",
+    "quizDirectionLabel": "sidju tadji",
+    "quizTab": "sidju",
+    "quizDirectionLabel": "sidju tadji",
+    "items": "da",
+    "actions": "nu gasnu",
+    "editCollectionInfo": "galfi lo liste",
+    "cloneCollection": "spoja lo liste",
+    "exportCollection": "cupra lo liste",
+    "mergeCollections": "jicla lo liste",
+    "deleteCollection": "vimcu lo liste",
+    "searchItemsPlaceholder": "sisku lo se liste...",
+    "addItem": "jmina lo se liste",
+    "importJsonButton": "jmina lo JSON",
+    "importJsonSuccess": "se jmina {imported} da .i se cliva {skipped} da",
+    "importJsonError": "fliba lo ka jmina lo JSON datnyvei",
+    "skippedItemsHeader": "lo se cliva",
+    "andMoreSkipped": ".e so'o {count} drata",
+    "addItem": "jmina lo se liste",
+    "viewAsFlashcards": "viska fi'o karda",
+    "levels": "karda klesi",
+    "onlyItemsWithoutFlashcards": "lo se liste poi na karda",
+    "noItems": "no da liste",
+    "editCollectionTitle": "galfi lo liste",
+    "nameLabel": "cmene",
+    "descriptionLabel": "skicu",
+    "makePublicLabel": "javni lo liste",
+    "saveChanges": "vreji lo nu galfi"
+  }
+}

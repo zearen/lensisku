@@ -1,0 +1,1 @@
+ALTER TABLE definitions ADD COLUMN embedding vector(384);

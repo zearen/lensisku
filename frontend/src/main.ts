@@ -1,0 +1,79 @@
+import { ViteSSG } from "vite-ssg";
+import Applic from "./App.vue";
+import { routes, setupRouterGuards } from "./router"; // Import routes and guard setup
+import i18n from "./i18n"; // Import the i18n instance
+import "./style.css"; // Keep global styles if any
+import Aura from "@primeuix/themes/aura";
+import PrimeVue from "primevue/config";
+import { Crepe } from '@milkdown/crepe' // Eagerly import Crepe
+import '@milkdown/crepe/theme/common/style.css'
+import '@milkdown/crepe/theme/frame.css'
+console.log('Crepe imported in main.js:', Crepe ? 'Yes' : 'No')
+
+// `export const createApp` is required for vite-ssg
+export const createApp = ViteSSG(
+  // the root component
+  Applic,
+  // vue-router options with routes array
+  { routes }, // Pass routes in the RouterOptions structure
+  // function to configure the app instance
+  ({
+    app, router,
+    isClient,
+  }) => {
+    // Setup navigation guards
+    setupRouterGuards(router, isClient)
+
+    app.use(PrimeVue, {
+      theme: {
+        preset: Aura,
+        options: {
+          darkModeSelector: ".dark-mode",
+        },
+      },
+    });
+
+    // Install i18n instance
+    app.use(i18n);
+
+    if (isClient) {
+      (window as any).MathJax = {
+        tex: {
+          inlineMath: [
+            ["$", "$"],
+            ["\\(", "\\)"],
+          ],
+          displayMath: [
+            ["$$", "$$"],
+            ["\\[", "\\]"],
+          ],
+          processEscapes: true,
+        },
+        options: {
+          skipHtmlTags: ["script", "noscript", "style", "textarea", "pre"],
+        },
+      };
+
+      // Load MathJax
+      (function () {
+        var script = document.createElement("script");
+        script.src =
+          "https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js";
+        script.async = true;
+        document.head.appendChild(script);
+      })();
+    }
+
+    // Potentially handle initial state hydration here if needed
+    // if (isClient && initialState) {
+    //   // Hydrate state...
+    // }
+  },
+  // SSG Options (optional)
+  {
+    // Specify routes to pre-render (defaults to routes defined in router)
+    // routes: ['/', '/about'], // Example if you had an /about page
+    // Add base path if deploying to a subdirectory
+    // base: '/my-app/',
+  }
+);

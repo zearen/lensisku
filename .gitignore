@@ -1,0 +1,29 @@
+mail_archive.db
+lojban-list
+target
+.env
+*.zip
+maildir
+.vite
+dist
+.pnpm-store
+.vite-ssg-temp
+node_modules
+archive/*
+.specstory/*
+
+# Vim
+[._]*.sw[a-p]
+*~
+
+# helps ripgrep not be silly
+.git
+
+.container_history
+.paypal_certs
+schema
+
+data
+/*.js
+/package.json
+/pnpm-lock.yaml

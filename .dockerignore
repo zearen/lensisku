@@ -1,0 +1,10 @@
+node_modules
+*.log
+.git
+.cache
+*.zip
+*.db
+*.txt
+target
+.vite
+.env.example

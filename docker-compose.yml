@@ -1,0 +1,54 @@
+version: '3.8'
+
+services:
+  app:
+    build: .
+    ports:
+      - "8051:80"
+    environment:
+      - DATABASE_URL=postgres://lojban:password@db/lojban_lens
+      - JWT_SECRET=${JWT_SECRET}
+    depends_on:
+      - db
+      - infinity
+    volumes:
+      - ./${MAILDIR_PATH}:/usr/src/app/maildir:ro
+    networks:
+      - lojban-network
+
+  infinity:
+    image: michaelf34/infinity:0.0.75-cpu
+    container_name: infinity
+    stdin_open: true
+    tty: true
+    volumes:
+      - ./data/infinity:/app/.cache
+    ports:
+      - 3002:3000
+      v2
+      --engine optimum
+      --model-id sentence-transformers/all-MiniLM-L6-v2
+      --port 3000
+    networks:
+      - lojban-network
+
+  db:
+    image: pgvector/pgvector:pg18-trixie
+    command: postgres -c shared_preload_libraries=vector
+    environment:
+      - POSTGRES_USER=${DB_USER}
+      - POSTGRES_PASSWORD=${DB_PASSWORD}
+      - POSTGRES_DB=${DB_NAME}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "${DB_PORT:-5432}:5432"
+    networks:
+      - lojban-network
+
+networks:
+  lojban-network:
+    driver: bridge
+
+volumes:
+  postgres_data:

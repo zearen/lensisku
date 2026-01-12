@@ -1,0 +1,78 @@
+name: Rust
+
+on:
+  push:
+    branches: [ "main" ]
+    paths-ignore:
+      - 'frontend/**'
+  pull_request:
+    branches: [ "main" ]
+    paths-ignore:
+      - 'frontend/**'
+
+env:
+  CARGO_TERM_COLOR: always
+  # Set C++ standard to C++17 for dependencies that compile C++ code
+  # This is required for tectonic_xetex_layout which uses ICU headers
+  # that require C++17 features (auto template parameters)
+  CXXFLAGS: -std=c++17
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Install Rust
+      uses: dtolnay/rust-toolchain@stable
+      # Automatically detects rust-toolchain.toml or rust-toolchain file if present
+      # Otherwise uses the latest stable version
+    
+    - name: Install system dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y \
+          pkg-config \
+          libgraphite2-dev \
+          libharfbuzz-dev \
+          libfontconfig1-dev \
+          libfreetype6-dev \
+          texlive-xetex \
+          texlive-fonts-recommended \
+          texlive-fonts-extra \
+          texlive-latex-extra \
+          texlive-lang-chinese \
+          texlive-lang-japanese \
+          fonts-noto-cjk \
+          fonts-noto-cjk-extra \
+          fonts-linuxlibertine \
+          jq  # Required for parsing JSON in security audit
+
+    - name: Security audit (critical only)
+      run: |
+        cargo install --locked cargo-audit
+        # Check for critical vulnerabilities via JSON output
+        if cargo audit --json | jq -e '
+          if (.vulnerabilities.found | not) then
+            true
+          else
+            (.vulnerabilities.list | map(select(.advisory.severity == "critical"))) | length == 0
+          end
+        '; then
+          echo "No critical vulnerabilities found."
+        else
+          echo "Critical vulnerabilities detected! Failing build."
+          exit 1
+        fi
+
+    # - name: Dependency checks
+    #   run: |
+    #     cargo install cargo-deny
+    #     cargo deny check
+
+    - name: Build
+      run: cargo build --verbose
+
+    - name: Run tests
+      run: cargo test --verbose

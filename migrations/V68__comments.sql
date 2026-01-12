@@ -1,0 +1,21 @@
+CREATE OR REPLACE VIEW convenientcomments AS
+SELECT 
+    c.commentid,
+    c.threadid,
+    c.parentid,
+    c.userid,
+    u.username,
+    u.realname,
+    c.time,
+    c.subject,
+    c.content,
+    c.commentnum,
+    cc.total_likes,
+    cc.total_replies,
+    t.valsiid,
+    t.definitionid
+FROM 
+    comments c
+    JOIN users u ON c.userid = u.userid
+    JOIN threads t ON c.threadid = t.threadid
+    LEFT JOIN comment_counters cc ON c.commentid = cc.comment_id;

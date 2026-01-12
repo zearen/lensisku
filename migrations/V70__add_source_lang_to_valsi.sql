@@ -1,0 +1,1 @@
+ALTER TABLE valsi ADD COLUMN source_langid INTEGER NOT NULL DEFAULT 1 REFERENCES languages(langid);

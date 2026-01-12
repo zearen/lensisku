@@ -1,0 +1,244 @@
+## Functional requirements
+- [ ] custom books
+- [ ] chatbot for course
+- [ ] opentelemetry, trace_id
+- [ ] user sessions: 
+    - [ ] BE
+    - [ ] FE
+- [ ] complete localization strings
+- [x] dont show non-lojban definitions in /valsi pages, dont get them, list them
+- [ ] plan non-lojban wiki entries:
+    - [ ] list them separately
+    - [ ] list them in recent changes
+    - [ ] separate vue page for individual definition
+    - [ ] wiki: definition not linked to lojban, versioning
+        - [ ] easy discussion of it
+    - [ ] allow adding non-lojban words
+        - [ ] entry can be a wiki page
+- [x] semantic search has some words almost always at top
+    - [ ] the hack must support all languages
+- [x] FE: static rendering
+- [ ] bulk import
+    - [x] report any errors
+    - [ ] must be revertable excluding definitions that already have comments.
+    - [x] keep bulk import in user history
+    - [ ] report if any definitions could not be deleted
+- [ ] Twitter-like UI
+    - [x] buttons to create new def, new thread
+    - [ ] button to create new wiki page
+    - [ ] rework thread UI: markdown, images
+    - [ ] convert comment to wiki page
+- [ ] tatoeba - review
+- twitter:
+    - [ ] review freedit, tweet
+    - [x] be: add twitter-like functionality for comments
+    - [x] fe: add twitter-like functionality for comments
+    - [x] search in comments
+    - [ ] top liked/bookmarked comments
+    - [ ] trending liked comments today
+    - [ ] add hashtag to comment
+    - [ ] trending hashtags/threads with hashtag
+    - [ ] advanced twitter functionality
+    - [x] types of "like" for comment
+    - [x] not more than 5 distinct emojis for a comment from a given user
+    - [ ] ability to follow users, personal "recent changes"
+- [ ] natlangwords
+    - [ ] if natlang word is not used anywhere remove it - cronjob?
+    - [ ] natlang words listing etc.
+- [ ] if comment > 5 MB show error
+- [ ] payments
+    - [ ] check payments on dev
+    - [ ] subscription system
+- [ ] CollectionWidget mustn't allow adding to same collection or show it
+- [x] recent page paginated with filters by types
+- [ ] store rafsi in a separate table
+- [ ] allow specifying rafsi for words
+- [ ] reproducible? export to pdf in "undefined" language leads to 500
+- [ ] help texts
+- [ ] colorful terbrismi
+- [ ] invalidate cache that only contains affected updated definitions
+- [ ] welcome page:
+    - [ ] fully rework, must remind Recent, more images
+    - [x] trending comments
+    - [ ] latest comments
+    - [x] recent changes
+    - [ ] top upvoted
+- [ ] comment:
+    - [x] add anchor for comment for quickly linking
+    - [x] scrolling to comment doesnt work
+    - [x] comment: allow attaching an image
+    - [x] comment: support markdown
+    - [ ] comment: select text to reply
+        - [ ] BE: selected quotation as metadata, whole comment text as an array of entities
+    - [x] commentform: latex/markdown notice css
+    - [ ] reaction to definition/valsi as special root comment
+- [ ] chat
+    - [ ] chat synced with IRC
+    - [ ] when email not confirmed mustnt have ability to chat
+- [ ] ACL:
+    - [x] normal permission+role system
+    - [x] special page for admins
+    - [x] actix-web-grants
+    - [ ] apply ACL for all paths
+    - [?] when email not confirmed mustnt have rights to add or edit definitions
+    - [ ] role to suppress chat activity / mute for N seconds user
+    - [ ] if unconfirmed role then show an alert in UI
+    - [ ] if no "specified" permission then dont show wdgets for it
+    - [ ] BE must return a precise message for 403
+    - [ ] admin tools:
+        - [x] the only admin by default is e.g. rlpowell
+        - [x] block user
+        - [ ] ?? revert changes
+        - [x] ability to create new admins
+        - [x] hardcoded permissions
+        - [x] avoid privilege escalation
+        - [ ] admin: ability to delete a word/definition
+- [ ] flashcards/collections
+    - [ ] list of allowed answers
+    - [x] add ability to review cards whose time hasnt come yet
+    - [x] fill-the-blank type of cards
+    - [ ] specific definition type for flashcards - wont be listed by default, only public flashcard defs are theoretically possible
+    - [ ] structure of flashcard collection:
+        - [ ] info cards (not to learn),
+        - [ ] levels,
+        - [x] images
+        - [ ] quiz answers (needs exploration/exploitation NN algo)
+    - [ ] shared progress for same flashcards across collections
+    - [ ] streak popup (for all/individual courses)
+    - [x] in question show definition language
+    - [ ] help texts what collection is and how it's related to flashcards
+    - [ ] FE: progress of exporting collection
+    - [ ] collection: disable already added definitions when choosing new ones
+    - [ ] import flashcards/collections in json
+    - [x] sync collection/flashcard notes
+        - [x] collection item notes must be copied to flashcards
+    - [x] emphasize collection item notes
+    - [x] BE: re-order
+    - [x] FE: re-order
+    - [x] for non-owner only show read/study controls
+    - [x] search
+    - [x] separate dictionary for flashcards
+    - [ ] smarter spaced repetition methods
+    - [ ] smarter flashcard types
+        - [?] if flashcard is an extension of another answer and second is easy then both are easy
+        - [?] by default automatically learn card if it is precisely a substring of another learnt flashcard
+        - [ ] dont update another flashcard: it's already in graduated state
+    - [x] better FSRS method
+    - [x] FSRS: automatic retrievability threshold
+
+- [x] CollectionWidget doesnt show collections
+- [x] item image is displayed in collection but not in flashcard to choose from
+- merge mails to comments
+- [x] mailarchive: delete it, make new schema: contents json[{mime, content}]
+- [x] vlazba as library
+- [x] comment search should display valsi/definition for each word
+- [x] getCollection fetched two times in home.vue
+- [x] pagination of comment results
+- [x] pagination of search results
+- [x] change password flow
+- [x] resend signup token but with exponential rate limiting
+- [x] threads: pagination
+    - [x] if you link to a comment on page 2 then go there: show the slice with the parent
+- [x] compatibility with earlier xml dumps (via cookies etc.)
+    - [x] not needed, we have cached exports now
+- [x] export to pdf: scheduled export
+- [x] recentchanges: save last filter to localstorage and use it instead
+- [x] links to individual definitions, highlight on landing
+    - [x] use those links in recentchanges, user actvity
+- [x] jvoka'a
+- [x] split search results into combinations
+- [x] jvozba for new definitions
+    - [x] generate best lujvo automatically (jvokaha => jvozba)
+- [x] audio buttons near words
+- [x] export collections
+    - [x] FE
+    - [x] process latex, dont display user notes if not present
+- [x] semantic search
+- [x] update collection item (notes)
+- [x] confirm signup via email flow
+- [x] contributions comments tab doesnt always link to correct discussion pages
+- [x] in definition listing discussions button redirects not to definitions discussions
+- [x] reactions must link to comment_id, not to its thread (or to parent comment)
+- [x] CRUD for user profile image
+    - [x] BE
+    - [x] BE: compress image and serve a compressed version instead
+    - [x] FE: CRUD
+    - [x] FE: show near comments
+    - [x] show in reactions
+    - [x] FE: better css for uploading avatar
+- [x] image field for definition
+- [x] alerts:
+    - [x] BE: subscribe endpoint doesnt work
+    - [x] "editable by me only" must be visible only if im the author of the def; BE: ignore if it's not you
+    - [x] mail alert when new reply to your comment. or new reply in the thread
+        - [x] subscribe/unsubscribe to valsi events
+- [x] FE mobile: definition list, profile
+- [x] user contributions listing
+- [x] if not logged in collections list should say "login to create or share personal collections"
+- [x] collections must have items position changeable
+- [x] FE: SEO: use /valsi/{word} paths
+- [x] cmaxes: normalize input: cmavo cluster to be merged elsewise: separate
+- [x] FE: password reset flow
+- [x] commentcounters for old comments arent created
+- [x] definition thread must show definition itself
+- [x] recent changes: if comment has empty subject link is not displayed
+- [x] if hyperlinked word doesnt exist suggest adding it
+- [x] valsi definitions are returned very slow
+- [x] FE: add to collection buttons offset from top
+- [x] FE: add to collection doesnt have collections count refreshed for all buttons
+- [x] FE: you must be able to retract your vote, not just downvote
+- [x] BE: you must be able to retract your vote, not just downvote
+- [x] handle word analysis failure when /api/language/analyze_word POST 400
+- [x] mobile css
+- [x] correctly rollback transactions in pools
+- [x] comments:
+    - [x] links to threads show empty discussions
+    - [x] link to create entry thread not visible
+- [x] recentchanges:
+    - [x] comments must link to comments pages
+    - [x] FE: must have hyperlinks
+    - [x] BE: recent changes must show who edited the definition, not the author of it; use definition_versions
+- [x] redirect to login bug
+- [x] collections: add a new a feature like on tatoeba.org:
+    - [x] attempting to add same item to collection results in 500
+    - [x] i should be able to bookmark definition into my given collection
+    - [x] i should be able to create a collection
+    - [x] i should be able to see collections of other users
+    - [x] i should be able to clone collection (mine or another user) into my collection with specfied by me name
+    - [x] i should be able to merge any two selected collections into one, duplicates must be merged of course
+- [x] add/edit etymology in definition
+- [x] advanced search filter is not being reset
+- [x] refresh tokens
+- [x] FE: when home view is loaded url params are not taken into account
+- [x] Swagger titles and descriptions
+- [x] versioning system of definitions
+    - [x] must take keywords and glosses into account
+- [x] keywords and glosswords must get saved
+- [x] BE: add created_at field in definitions
+- [x] FE: show created_at field in definitions
+- [x] dictionary export
+- [x] voting
+- [x] listing of words, sorting, filtering by word types, languages, users who created
+    - [x] if selmaho is set remove wordtype selection
+- [x] mail alerts when someone edits your definition
+- [x] option to make a definition editable by you only
+- [x] user listing
+- [x] recent changes
+- [x] move logic from controller.rs to service.rs where needed
+- [x] automatic openapi specs for each controller
+- [x] examples
+- [x] comment/reply-to-comment system
+- [x] via an sql query freeze officialdata from being edited
+
+## Non-functional requirements
+- [ ] user-friendliness for non-logged in users
+- [ ] mobile-friendly
+- [ ] security
+    - [ ] rate-limiting by ip via Redis
+    - [ ] rate-limiting of mail messages
+    - [ ] rate-limiting of user actions: cant add more than X actions per day
+    - [ ] password reset must use Reds, not Postgresql
+- [ ] performance
+- [ ] all endpoints must use transactions, txs must be committed like add_valsi
+- [ ] test with the latest sql dump
+    - [ ] prepare procedure for the migration from la jbovlaste

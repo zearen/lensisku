@@ -1,0 +1,49 @@
+services:
+  db:
+    container_name: lenpostgres
+    image: pgvector/pgvector:pg18-trixie
+    environment:
+      - POSTGRES_USER=${DB_USER}
+      - POSTGRES_PASSWORD=${DB_PASSWORD}
+      - POSTGRES_DB=${DB_NAME}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "${DB_PORT:-5432}:5432"
+    networks:
+      - lojban-network
+  redis:
+    container_name: lenredis
+    image: redis:alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    command: redis-server --appendonly yes
+    networks:
+      - lojban-network
+
+  infinity:
+    image: michaelf34/infinity:0.0.75-cpu
+    container_name: infinity
+    stdin_open: true
+    tty: true
+    volumes:
+      - ./data/infinity:/app/.cache
+    ports:
+      - 3002:3000
+    command: >
+      v2
+      --engine optimum
+      --model-id sentence-transformers/all-MiniLM-L6-v2
+      --port 3000
+    networks:
+      - lojban-network
+
+networks:
+  lojban-network:
+    driver: bridge
+
+volumes:
+  postgres_data:
+  redis_data:

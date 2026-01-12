@@ -1,0 +1,16 @@
+User-agent: *
+Disallow: /login
+Disallow: /signup
+Disallow: /reset-password
+Disallow: /change-password
+Disallow: /profile
+Disallow: /user/
+Disallow: /admin/
+Disallow: /paypal/
+Disallow: /confirm-email
+Disallow: /bulk-import
+Disallow: /role-management
+Disallow: /balance
+Disallow: /export
+
+Sitemap: https://lensisku.lojban.org/api/jbovlaste/sitemap.xml
