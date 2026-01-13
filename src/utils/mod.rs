@@ -1,7 +1,9 @@
 use actix_web::{HttpResponse, ResponseError};
+use ammonia::Builder as AmmoniaBuilder;
 use base64::{engine::general_purpose::STANDARD as BASE64, Engine};
 use once_cell::sync::Lazy;
 use regex::{Error as RegexError, Regex};
+use std::collections::HashSet;
 
 use crate::collections::models::ImageData;
 
@@ -146,8 +148,15 @@ mod tests {
 }
 
 pub fn remove_html_tags(html: &str) -> String {
-    static TAG_RE: Lazy<Regex> = Lazy::new(|| Regex::new(r#"(?i)<[/?[a-z][^>]*>"#).unwrap());
-    TAG_RE.replace_all(html, "").into_owned()
+    static AMMONIA: Lazy<AmmoniaBuilder<'static>> = Lazy::new(|| {
+        let mut builder = AmmoniaBuilder::default();
+        // Remove all HTML tags; MathJax/LaTeX markers remain as plain text.
+        builder.tags(HashSet::new());
+        builder.clean_content_tags(HashSet::new());
+        builder
+    });
+
+    AMMONIA.clean(html).to_string()
 }
 
 pub fn validate_item_image(image: &ImageData) -> Result<(), String> {

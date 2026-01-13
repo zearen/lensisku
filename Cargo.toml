@@ -86,6 +86,7 @@ rand = "0.9.1"
 uuid = { version = "1.16.0", features = ["v4", "serde"] }
 tectonic = {version = "0.15.0", features = ["external-harfbuzz"]}
 regex = "1.11.1"
+ammonia = "4.1.2"
 utoipauto = "0.2.0"
 tempfile = "3.19.1"
 xml = "0.8.20"
