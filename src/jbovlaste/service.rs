@@ -671,8 +671,9 @@ pub async fn search_definitions(
     })
 }
 
-/// Fast search for non-logged-in users - avoids expensive JOINs (votes, comments, user-specific data)
-/// Searches in words, definitions, notes, selmaho, and glosswords
+/// Fast search for non-logged-in users - NO JOINs at all!
+/// Uses cached fields in definitions table for maximum performance
+/// Searches in words, definitions, notes, selmaho, and glosswords via cached_search_text
 pub async fn fast_search_definitions(
     pool: &Pool,
     params: SearchDefinitionsParams,
@@ -744,30 +745,29 @@ pub async fn fast_search_definitions(
     let offset_param_index = query_params.len() + 1;
     query_params.push(&offset);
 
-    // Fast query using cached_search_text - no JOINs except valsi for ranking
-    // Single indexed text search replaces all keywordmapping/natlangwords JOINs
+    // Fast query using cached_search_text - NO JOINs at all!
+    // All data is cached in definitions table for maximum speed
     let query_string = format!(
         r#"
         SELECT 
             d.definitionid, d.valsiid, d.langid, d.definition, d.notes, d.selmaho, d.created_at,
-            v.word as valsiword,
+            d.cached_valsiword as valsiword,
             d.cached_username as username,
             d.cached_langrealname as langrealname,
             d.cached_type_name as type_name,
             0 as score,
             CASE
-                WHEN v.word = $1 THEN 10
-                WHEN v.word ILIKE $1 THEN 9
-                WHEN v.rafsi IS NOT NULL AND $1 = ANY(string_to_array(v.rafsi, ' ')) THEN 8
-                WHEN v.word ILIKE $2 THEN 7
+                WHEN d.cached_valsiword = $1 THEN 10
+                WHEN d.cached_valsiword ILIKE $1 THEN 9
+                WHEN d.cached_rafsi IS NOT NULL AND $1 = ANY(string_to_array(d.cached_rafsi, ' ')) THEN 8
+                WHEN d.cached_valsiword ILIKE $2 THEN 7
                 WHEN d.cached_search_text ILIKE $2 THEN 6
                 ELSE 0
             END as rank
         FROM definitions d
-        JOIN valsi v ON d.valsiid = v.valsiid
         WHERE d.cached_search_text ILIKE $2
         AND (d.langid = ANY($3) OR $3 IS NULL)
-        AND v.source_langid = $4
+        AND d.cached_source_langid = $4
         {additional_conditions}
         ORDER BY rank DESC, {} {}
         LIMIT {} OFFSET {}"#,
@@ -825,10 +825,10 @@ pub async fn fast_search_definitions(
         });
     }
 
-    // Count query - simplified using cached_search_text
+    // Count query - simplified using cached_search_text, no JOINs
     let base_conditions = r#"d.cached_search_text ILIKE $2
                   AND (d.langid = ANY($3) OR $3 IS NULL)
-                  AND v.source_langid = $4"#;
+                  AND d.cached_source_langid = $4"#;
 
     // Build dynamic conditions with correct parameter numbering
     let mut conditions = vec![];
@@ -845,9 +845,9 @@ pub async fn fast_search_definitions(
         current_param_num += 1;
     }
 
-    // word_type condition needs to increment param_num too
+    // word_type condition needs to increment param_num too (using cached field)
     if params.word_type.is_some() {
-        conditions.push(format!("AND v.typeid = ${}", current_param_num));
+        conditions.push(format!("AND d.cached_typeid = ${}", current_param_num));
     }
 
     let additional_conditions = conditions.join(" ");
@@ -856,7 +856,6 @@ pub async fn fast_search_definitions(
         r#"
     SELECT COUNT(DISTINCT d.definitionid)
     FROM definitions d
-    JOIN valsi v ON d.valsiid = v.valsiid
     WHERE {base_conditions} {additional_conditions}"#
     );
 
