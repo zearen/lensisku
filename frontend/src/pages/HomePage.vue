@@ -333,6 +333,7 @@ import { useRouter, useRoute } from 'vue-router';
 import {
   api,
   searchDefinitions,
+  fastSearchDefinitions,
   getLanguages,
   getTrendingComments,
   getRecentChanges,
@@ -507,10 +508,20 @@ const fetchDefinitions = async (page, search = '') => {
       params.selmaho = filters.value.selmaho
     }
 
-    const response = await searchDefinitions({
-      ...params,
-      semantic: searchMode.value === 'semantic',
-    }, signal)
+    let response
+    if (auth.state.isLoggedIn) {
+      response = await searchDefinitions({
+        ...params,
+        semantic: searchMode.value === 'semantic',
+      }, signal)
+    } else {
+      // Use fast search for non-logged in users (similar to FastSearchPage)
+      // We remove include_comments to match FastSearchPage behavior/performance
+      const fastParams = { ...params }
+      delete fastParams.include_comments
+      
+      response = await fastSearchDefinitions(fastParams, signal)
+    }
 
     // Only process if this is still the latest request
     if (!definitionsSearchQueue.shouldProcess(requestId)) {
