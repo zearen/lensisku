@@ -699,13 +699,17 @@ pub async fn fast_search_definitions(
         _ => "ASC",
     };
 
-    // Start with base parameters (will be $1-$2)
+    // Start with base parameters (will be $1-$4)
+    // Order: $1=search_term, $2=like_pattern, $3=languages_slice, $4=source_langid_value
+    let source_langid_value = params.source_langid.unwrap_or(1);
     let mut query_params: Vec<&(dyn tokio_postgres::types::ToSql + Sync)> = vec![
         &params.search_term,
         &like_pattern,
+        &languages_slice,
+        &source_langid_value,
     ];
 
-    // Build dynamic conditions
+    // Build dynamic conditions (these will be $5, $6, $7, etc.)
     let mut conditions = vec![];
 
     // Add selmaho condition if present
@@ -714,26 +718,19 @@ pub async fn fast_search_definitions(
         query_params.push(selmaho);
     }
 
-    // Add username condition if present
+    // Add username condition if present (using cached field)
     if let Some(username) = &params.username {
-        conditions.push(format!("AND u.username = ${}", query_params.len() + 1));
+        conditions.push(format!("AND d.cached_username = ${}", query_params.len() + 1));
         query_params.push(username);
     }
 
+    // Add word_type condition if present (using cached field)
     let word_type_value;
     if let Some(word_type) = params.word_type {
         word_type_value = word_type;
-        conditions.push(format!("AND v.typeid = ${}", query_params.len() + 1));
+        conditions.push(format!("AND d.cached_typeid = ${}", query_params.len() + 1));
         query_params.push(&word_type_value);
     }
-
-    // Add source_langid condition if present, otherwise default to 1 (Lojban)
-    let source_langid_value = params.source_langid.unwrap_or(1);
-    conditions.push(format!("AND v.source_langid = ${}", query_params.len() + 1));
-    query_params.push(&source_langid_value);
-
-    // Add languages_slice parameter ($3)
-    query_params.push(&languages_slice);
 
     let additional_conditions = conditions.join(" ");
 
@@ -846,6 +843,7 @@ pub async fn fast_search_definitions(
     // word_type condition needs to increment param_num too (using cached field)
     if params.word_type.is_some() {
         conditions.push(format!("AND d.cached_typeid = ${}", current_param_num));
+        current_param_num += 1;
     }
 
     let additional_conditions = conditions.join(" ");
