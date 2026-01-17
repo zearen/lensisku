@@ -355,26 +355,38 @@ pub async fn search_definitions(
 
     // Add username condition if present
     if let Some(username) = &params.username {
-        conditions.push(format!("AND u.username = ${}", query_params.len() + 1));
+        // Use cached_username to avoid joining users table
+        conditions.push(format!(
+            "AND d.cached_username = ${}",
+            query_params.len() + 1
+        ));
         query_params.push(username);
     }
 
     let word_type_value;
     if let Some(word_type) = params.word_type {
         word_type_value = word_type;
-        conditions.push(format!("AND v.typeid = ${}", query_params.len() + 1));
+        // Use cached_typeid to avoid joining valsi/valsitypes tables
+        conditions.push(format!(
+            "AND d.cached_typeid = ${}",
+            query_params.len() + 1
+        ));
         query_params.push(&word_type_value);
     }
 
     // Add source_langid condition if present, otherwise default to 1 (Lojban)
+    // Use cached_source_langid to avoid joining valsi table
     let source_langid_value = params.source_langid.unwrap_or(1);
-    conditions.push(format!("AND v.source_langid = ${}", query_params.len() + 1));
+    conditions.push(format!(
+        "AND d.cached_source_langid = ${}",
+        query_params.len() + 1
+    ));
     query_params.push(&source_langid_value);
 
     let additional_conditions = conditions.join(" ");
 
     // Build query with language filter and selmaho
-    // Optimized to use JOINs instead of subqueries for better performance
+    // Optimized to use cached fields and avoid JOINs for filtering
     let query_string = if params.include_comments {
         format!(
             r#"
@@ -391,19 +403,19 @@ pub async fn search_definitions(
             SELECT 
                 d.definitionid, d.valsiid, d.langid, d.definition, d.notes, d.etymology, d.created_at,
                 d.selmaho, d.jargon, d.definitionnum, d.time, d.owner_only,
-                v.word as valsiword,
-                u.username,
-                l.realname as langrealname,
-                vt.descriptor as type_name,
+                d.cached_valsiword as valsiword,
+                d.cached_username as username,
+                d.cached_langrealname as langrealname,
+                d.cached_type_name as type_name,
                 COALESCE(dv.score, 0) as score,
                 COALESCE(cc.comment_count, 0) as comment_count,
                 (di.definition_id IS NOT NULL) as has_image,
                 CASE
-                    WHEN v.word = $1 THEN 12
-                    WHEN v.word ILIKE $1 THEN 11
-                    WHEN v.word ~* $3 THEN 10
-                    WHEN v.rafsi IS NOT NULL AND $1 = ANY(string_to_array(v.rafsi, ' ')) THEN 9
-                    WHEN v.word ILIKE $2 THEN 8
+                    WHEN d.cached_valsiword = $1 THEN 12
+                    WHEN d.cached_valsiword ILIKE $1 THEN 11
+                    WHEN d.cached_valsiword ~* $3 THEN 10
+                    WHEN d.cached_rafsi IS NOT NULL AND $1 = ANY(string_to_array(d.cached_rafsi, ' ')) THEN 9
+                    WHEN d.cached_valsiword ILIKE $2 THEN 8
                     WHEN d.definition ~ $3 THEN 6
                     WHEN d.notes ~ $3 THEN 4
                     WHEN d.selmaho ~ $3 THEN 3
@@ -413,26 +425,15 @@ pub async fn search_definitions(
                     ELSE 0
                 END as rank
             FROM definitions d
-            JOIN valsi v ON d.valsiid = v.valsiid
-            JOIN valsitypes vt ON v.typeid = vt.typeid
-            JOIN users u ON d.userid = u.userid
-            JOIN languages l ON d.langid = l.langid
             LEFT JOIN vote_scores dv ON dv.definitionid = d.definitionid
             LEFT JOIN LATERAL (
                 SELECT COUNT(c.commentid) as comment_count
                 FROM threads t
                 LEFT JOIN comments c ON c.threadid = t.threadid
-                WHERE (t.valsiid = v.valsiid OR t.definitionid = d.definitionid)
+                WHERE (t.valsiid = d.valsiid OR t.definitionid = d.definitionid)
             ) cc ON true
             LEFT JOIN definition_images_flag di ON di.definition_id = d.definitionid
-            WHERE ($1 = '' OR
-                  v.word ILIKE $2 OR
-                  v.source_langid = 1 AND
-                  d.definition ILIKE $2 OR
-                  d.notes ILIKE $2 OR
-                  d.selmaho ILIKE $2 OR
-                  $1 = ANY(string_to_array(v.rafsi, ' '))
-                  )
+            WHERE (d.cached_search_text ILIKE $2)
                   AND (d.langid = ANY($4) OR $4 IS NULL)
                   {additional_conditions}
         ),
@@ -463,18 +464,18 @@ pub async fn search_definitions(
             SELECT 
                 d.definitionid, d.valsiid, d.langid, d.definition, d.notes, d.etymology, d.created_at,
                 d.selmaho, d.jargon, d.definitionnum, d.time, d.owner_only,
-                v.word as valsiword,
-                u.username,
-                l.realname as langrealname,
-                vt.descriptor as type_name,
+                d.cached_valsiword as valsiword,
+                d.cached_username as username,
+                d.cached_langrealname as langrealname,
+                d.cached_type_name as type_name,
                 COALESCE(dv.score, 0) as score,
                 (di.definition_id IS NOT NULL) as has_image,
                 CASE
-                    WHEN v.word = $1 THEN 12
-                    WHEN v.word ILIKE $1 THEN 11
-                    WHEN v.word ~* $3 THEN 10
-                    WHEN v.rafsi IS NOT NULL AND $1 = ANY(string_to_array(v.rafsi, ' ')) THEN 9
-                    WHEN v.word ILIKE $2 THEN 8
+                    WHEN d.cached_valsiword = $1 THEN 12
+                    WHEN d.cached_valsiword ILIKE $1 THEN 11
+                    WHEN d.cached_valsiword ~* $3 THEN 10
+                    WHEN d.cached_rafsi IS NOT NULL AND $1 = ANY(string_to_array(d.cached_rafsi, ' ')) THEN 9
+                    WHEN d.cached_valsiword ILIKE $2 THEN 8
                     WHEN d.definition ~ $3 THEN 6
                     WHEN d.notes ~ $3 THEN 4
                     WHEN d.selmaho ~ $3 THEN 3
@@ -484,20 +485,9 @@ pub async fn search_definitions(
                     ELSE 0
                 END as rank
             FROM definitions d
-            JOIN valsi v ON d.valsiid = v.valsiid
-            JOIN valsitypes vt ON v.typeid = vt.typeid
-            JOIN users u ON d.userid = u.userid
-            JOIN languages l ON d.langid = l.langid
             LEFT JOIN vote_scores dv ON dv.definitionid = d.definitionid
             LEFT JOIN definition_images_flag di ON di.definition_id = d.definitionid
-            WHERE ($1 = '' OR
-                  v.word ILIKE $2 OR
-                  v.source_langid = 1 AND
-                  d.definition ILIKE $2 OR
-                  d.notes ILIKE $2 OR
-                  d.selmaho ILIKE $2 OR
-                  $1 = ANY(string_to_array(v.rafsi, ' '))
-                  )
+            WHERE (d.cached_search_text ILIKE $2)
                   AND (d.langid = ANY($4) OR $4 IS NULL)
                   {additional_conditions}
         ),
@@ -570,48 +560,85 @@ pub async fn search_definitions(
         });
     }
 
-    // Base conditions now include source_langid check ($5)
-    let base_conditions = r#"($1 = '' OR
-                  v.word ILIKE $2 OR
-                  d.definition ILIKE $2 OR
-                  d.notes ILIKE $2 OR
-                  d.selmaho ILIKE $2 OR
-                  $1 = ANY(string_to_array(v.rafsi, ' ')))
+    // Base conditions now include source_langid check (which was appended to additional_conditions)
+    // But for the count query we rebuild parameters and conditions
+    // The query used params $1..$4 in base part (params 0..3 in vector)
+    // And additional conditions starting from $7 (index 6, len=query_params.len())
+    // Wait, query_params has 6 base params?
+    // In main query:
+    // $1: search_term
+    // $2: like_pattern
+    // $3: word_boundary_pattern
+    // $4: languages_slice
+    // $5: per_page
+    // $6: offset
+    // Additional conditions start from $7.
+
+    // For count query:
+    // We need to match the params used in WHERE clause.
+    // Base WHERE uses $2 (like_pattern) and $4 (languages_slice).
+    // It does NOT use $1 or $3 in the base filtering (only in RANK calculation, which we use in HAVING rank > 0 or WHERE rank > 0 equivalent).
+    // We should copy the RANK logic to count query OR simplify it.
+    // The previous count query duplicated the RANK logic.
+
+    let base_conditions = r#"(d.cached_search_text ILIKE $2)
                   AND (d.langid = ANY($4) OR $4 IS NULL)
-                  AND v.source_langid = $5"#; // Added source_langid condition
+                  {additional_conditions}"#;
 
-    // Build dynamic conditions with correct parameter numbering
-    let mut conditions = vec![];
-    let mut current_param_num = 6; // Start from 6 since we now use 1-5 in base
+    // We need to re-construct params for the count query because the main query params included per_page/offset which we don't want constraints on?
+    // Actually simpler: reuse the same params vector structure but just select count.
+    // But `count_query` logic in original code rebuilt params.
+    // Let's rebuild params to be safe and clear.
 
-    if params.selmaho.is_some() {
-        conditions.push(format!("AND d.selmaho = ${}", current_param_num));
+    let mut count_params: Vec<&(dyn tokio_postgres::types::ToSql + Sync)> = vec![
+        &params.search_term,    // $1
+        &like_pattern,          // $2
+        &word_boundary_pattern, // $3
+        &languages_slice,       // $4
+    ];
+    // No per_page, no offset.
+
+    // Rebuild conditions string for count query (indices will change because we removed 2 params)
+    let mut count_conditions = vec![];
+    let mut current_param_num = 5;
+
+    // Re-add params for conditions
+    if let Some(selmaho) = &params.selmaho {
+        count_conditions.push(format!("AND d.selmaho = ${}", current_param_num));
+        count_params.push(selmaho);
         current_param_num += 1;
     }
-
-    // Add username condition if present
-    if params.username.is_some() {
-        conditions.push(format!("AND u.username = ${}", current_param_num));
+    if let Some(username) = &params.username {
+        count_conditions.push(format!("AND d.cached_username = ${}", current_param_num));
+        count_params.push(username);
         current_param_num += 1;
     }
-
-    // word_type condition needs to increment param_num too
-    if params.word_type.is_some() {
-        conditions.push(format!("AND v.typeid = ${}", current_param_num));
+    let word_type_value; // needs new binding
+    if let Some(word_type) = params.word_type {
+        word_type_value = word_type;
+        count_conditions.push(format!("AND d.cached_typeid = ${}", current_param_num));
+        count_params.push(&word_type_value);
+        current_param_num += 1;
     }
+    // source_langid
+    count_conditions.push(format!(
+        "AND d.cached_source_langid = ${}",
+        current_param_num
+    ));
+    count_params.push(&source_langid_value);
 
-    let additional_conditions = conditions.join(" ");
+    let count_additional = count_conditions.join(" ");
 
     let count_query = format!(
         r#"
     WITH ranked_results AS (
         SELECT d.definitionid,
             CASE
-                WHEN v.word = $1 THEN 12
-                WHEN v.word ILIKE $1 THEN 11
-                WHEN v.word ~* $3 THEN 10
-                WHEN v.rafsi IS NOT NULL AND $1 = ANY(string_to_array(v.rafsi, ' ')) THEN 9
-                WHEN v.word ILIKE $2 THEN 8
+                WHEN d.cached_valsiword = $1 THEN 12
+                WHEN d.cached_valsiword ILIKE $1 THEN 11
+                WHEN d.cached_valsiword ~* $3 THEN 10
+                WHEN d.cached_rafsi IS NOT NULL AND $1 = ANY(string_to_array(d.cached_rafsi, ' ')) THEN 9
+                WHEN d.cached_valsiword ILIKE $2 THEN 8
                 WHEN d.definition ~ $3 THEN 6
                 WHEN d.notes ~ $3 THEN 4
                 WHEN d.selmaho ~ $3 THEN 3
@@ -621,42 +648,18 @@ pub async fn search_definitions(
                 ELSE 0
             END as rank
         FROM definitions d
-        JOIN valsi v ON d.valsiid = v.valsiid
-        JOIN valsitypes vt ON v.typeid = vt.typeid
-        JOIN users u ON d.userid = u.userid
-         JOIN languages l ON d.langid = l.langid
-         WHERE {base_conditions} {additional_conditions}
+        WHERE (d.cached_search_text ILIKE $2)
+              AND (d.langid = ANY($4) OR $4 IS NULL)
+              {}
     )
     SELECT COUNT(DISTINCT definitionid)
     FROM ranked_results
-    WHERE rank > 0"#
+    WHERE rank > 0"#,
+        count_additional
     );
 
-    // Create params for count query, adding source_langid after base params
-    let mut count_params: Vec<&(dyn tokio_postgres::types::ToSql + Sync)> = vec![
-        &params.search_term,    // $1
-        &like_pattern,          // $2
-        &word_boundary_pattern, // $3
-        &languages_slice,       // $4
-        &source_langid_value,   // $5 (Now part of base_conditions)
-    ];
-
-    // Add conditional parameters in the correct order, matching additional_conditions logic
-    if let Some(selmaho) = &params.selmaho {
-        count_params.push(selmaho); // $6 if present
-    }
-    if let Some(username) = &params.username {
-        count_params.push(username); // $7 if selmaho present, else $6
-    }
-    let word_type_value; // Temporary storage needed outside the if block
-    if let Some(word_type) = params.word_type {
-        word_type_value = word_type;
-        count_params.push(&word_type_value); // $8/$7/$6 depending on others
-    }
-    // source_langid_value is already added above
-
     let total: i64 = transaction
-        .query_one(&count_query, &count_params) // Use the constructed count_params
+        .query_one(&count_query, &count_params)
         .await?
         .get(0);
 
