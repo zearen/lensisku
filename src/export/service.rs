@@ -1153,6 +1153,7 @@ async fn check_natural_entries(
         "SELECT EXISTS (
             SELECT 1
             FROM valsibestguesses vbg
+            JOIN valsi v ON v.valsiid = vbg.valsiid
             JOIN natlangwordbestguesses nlwbg ON nlwbg.definitionid = vbg.definitionid
             JOIN natlangwords nlw ON nlw.wordid = nlwbg.natlangwordid
             {}

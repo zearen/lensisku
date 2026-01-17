@@ -42,15 +42,15 @@ SET
 CREATE INDEX IF NOT EXISTS idx_definitions_cached_search_text_gin 
 ON definitions USING gin(cached_search_text gin_trgm_ops);
 
--- Covering index for fast search main query
+-- Covering index for fast search main query (excluding large text fields to avoid max size limit)
 CREATE INDEX IF NOT EXISTS idx_definitions_fast_search_covering 
-ON definitions(definitionid, valsiid, langid, definition, notes, selmaho, created_at, cached_username, cached_langrealname, cached_type_name)
+ON definitions(definitionid, valsiid, langid, selmaho, created_at, cached_username, cached_langrealname, cached_type_name)
 WHERE definition != '';
 
 -- Composite index for filtering (langid + valsiid)
 CREATE INDEX IF NOT EXISTS idx_definitions_langid_valsiid 
 ON definitions(langid, valsiid)
-INCLUDE (definitionid, cached_search_text);
+INCLUDE (definitionid);
 
 -- Index for valsi filtering (minimal join needed)
 CREATE INDEX IF NOT EXISTS idx_valsi_valsiid_source_langid_word 
