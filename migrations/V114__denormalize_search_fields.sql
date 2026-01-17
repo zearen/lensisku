@@ -11,34 +11,32 @@ ALTER TABLE definitions ADD COLUMN IF NOT EXISTS cached_search_text TEXT;
 
 -- Populate cached_search_text with all searchable content
 -- This includes: word, rafsi, definition, notes, selmaho, and all glosswords/place keywords
-UPDATE definitions d
+UPDATE definitions
 SET cached_search_text = LOWER(
-    COALESCE(v.word, '') || ' ' ||
-    COALESCE(v.rafsi, '') || ' ' ||
-    COALESCE(d.definition, '') || ' ' ||
-    COALESCE(d.notes, '') || ' ' ||
-    COALESCE(d.selmaho, '') || ' ' ||
+    COALESCE((SELECT word FROM valsi WHERE valsiid = definitions.valsiid), '') || ' ' ||
+    COALESCE((SELECT rafsi FROM valsi WHERE valsiid = definitions.valsiid), '') || ' ' ||
+    COALESCE(definitions.definition, '') || ' ' ||
+    COALESCE(definitions.notes, '') || ' ' ||
+    COALESCE(definitions.selmaho, '') || ' ' ||
     COALESCE((
         SELECT string_agg(LOWER(n.word || ' ' || COALESCE(n.meaning, '')), ' ')
         FROM keywordmapping k
         JOIN natlangwords n ON k.natlangwordid = n.wordid
-        WHERE k.definitionid = d.definitionid
+        WHERE k.definitionid = definitions.definitionid
     ), '')
-)
-FROM valsi v
-WHERE d.valsiid = v.valsiid;
+);
 
 -- Populate cached display fields
-UPDATE definitions d
+UPDATE definitions
 SET 
-    cached_username = u.username,
-    cached_langrealname = l.realname,
-    cached_type_name = vt.descriptor
-FROM valsi v
-JOIN users u ON d.userid = u.userid
-JOIN languages l ON d.langid = l.langid
-JOIN valsitypes vt ON v.typeid = vt.typeid
-WHERE d.valsiid = v.valsiid;
+    cached_username = (SELECT username FROM users WHERE userid = definitions.userid),
+    cached_langrealname = (SELECT realname FROM languages WHERE langid = definitions.langid),
+    cached_type_name = (
+        SELECT vt.descriptor 
+        FROM valsi v 
+        JOIN valsitypes vt ON v.typeid = vt.typeid 
+        WHERE v.valsiid = definitions.valsiid
+    );
 
 -- Create GIN index for fast text search on cached_search_text
 CREATE INDEX IF NOT EXISTS idx_definitions_cached_search_text_gin 
@@ -65,84 +63,80 @@ RETURNS TRIGGER AS $$
 BEGIN
     -- Update cached fields for the affected definition(s)
     IF TG_TABLE_NAME = 'definitions' THEN
-        UPDATE definitions d
+        UPDATE definitions
         SET 
-            cached_username = u.username,
-            cached_langrealname = l.realname,
-            cached_type_name = vt.descriptor,
+            cached_username = (SELECT username FROM users WHERE userid = definitions.userid),
+            cached_langrealname = (SELECT realname FROM languages WHERE langid = definitions.langid),
+            cached_type_name = (
+                SELECT vt.descriptor 
+                FROM valsi v 
+                JOIN valsitypes vt ON v.typeid = vt.typeid 
+                WHERE v.valsiid = definitions.valsiid
+            ),
             cached_search_text = LOWER(
-                COALESCE(v.word, '') || ' ' ||
-                COALESCE(v.rafsi, '') || ' ' ||
-                COALESCE(d.definition, '') || ' ' ||
-                COALESCE(d.notes, '') || ' ' ||
-                COALESCE(d.selmaho, '') || ' ' ||
+                COALESCE((SELECT word FROM valsi WHERE valsiid = definitions.valsiid), '') || ' ' ||
+                COALESCE((SELECT rafsi FROM valsi WHERE valsiid = definitions.valsiid), '') || ' ' ||
+                COALESCE(definitions.definition, '') || ' ' ||
+                COALESCE(definitions.notes, '') || ' ' ||
+                COALESCE(definitions.selmaho, '') || ' ' ||
                 COALESCE((
                     SELECT string_agg(LOWER(n.word || ' ' || COALESCE(n.meaning, '')), ' ')
                     FROM keywordmapping k
                     JOIN natlangwords n ON k.natlangwordid = n.wordid
-                    WHERE k.definitionid = d.definitionid
+                    WHERE k.definitionid = definitions.definitionid
                 ), '')
             )
-        FROM valsi v
-        JOIN users u ON d.userid = u.userid
-        JOIN languages l ON d.langid = l.langid
-        JOIN valsitypes vt ON v.typeid = vt.typeid
-        WHERE d.definitionid = COALESCE(NEW.definitionid, OLD.definitionid)
-        AND d.valsiid = v.valsiid;
+        WHERE definitions.definitionid = COALESCE(NEW.definitionid, OLD.definitionid);
     ELSIF TG_TABLE_NAME = 'keywordmapping' THEN
         -- Update cached_search_text when keywords change
-        UPDATE definitions d
+        UPDATE definitions
         SET cached_search_text = LOWER(
-            COALESCE(v.word, '') || ' ' ||
-            COALESCE(v.rafsi, '') || ' ' ||
-            COALESCE(d.definition, '') || ' ' ||
-            COALESCE(d.notes, '') || ' ' ||
-            COALESCE(d.selmaho, '') || ' ' ||
+            COALESCE((SELECT word FROM valsi WHERE valsiid = definitions.valsiid), '') || ' ' ||
+            COALESCE((SELECT rafsi FROM valsi WHERE valsiid = definitions.valsiid), '') || ' ' ||
+            COALESCE(definitions.definition, '') || ' ' ||
+            COALESCE(definitions.notes, '') || ' ' ||
+            COALESCE(definitions.selmaho, '') || ' ' ||
             COALESCE((
                 SELECT string_agg(LOWER(n.word || ' ' || COALESCE(n.meaning, '')), ' ')
                 FROM keywordmapping k
                 JOIN natlangwords n ON k.natlangwordid = n.wordid
-                WHERE k.definitionid = d.definitionid
+                WHERE k.definitionid = definitions.definitionid
             ), '')
         )
-        FROM valsi v
-        WHERE d.definitionid = COALESCE(NEW.definitionid, OLD.definitionid)
-        AND d.valsiid = v.valsiid;
+        WHERE definitions.definitionid = COALESCE(NEW.definitionid, OLD.definitionid);
     ELSIF TG_TABLE_NAME = 'valsi' THEN
         -- Update cached_search_text when valsi word/rafsi changes
-        UPDATE definitions d
+        UPDATE definitions
         SET cached_search_text = LOWER(
-            COALESCE(v.word, '') || ' ' ||
-            COALESCE(v.rafsi, '') || ' ' ||
-            COALESCE(d.definition, '') || ' ' ||
-            COALESCE(d.notes, '') || ' ' ||
-            COALESCE(d.selmaho, '') || ' ' ||
+            COALESCE((SELECT word FROM valsi WHERE valsiid = definitions.valsiid), '') || ' ' ||
+            COALESCE((SELECT rafsi FROM valsi WHERE valsiid = definitions.valsiid), '') || ' ' ||
+            COALESCE(definitions.definition, '') || ' ' ||
+            COALESCE(definitions.notes, '') || ' ' ||
+            COALESCE(definitions.selmaho, '') || ' ' ||
             COALESCE((
                 SELECT string_agg(LOWER(n.word || ' ' || COALESCE(n.meaning, '')), ' ')
                 FROM keywordmapping k
                 JOIN natlangwords n ON k.natlangwordid = n.wordid
-                WHERE k.definitionid = d.definitionid
+                WHERE k.definitionid = definitions.definitionid
             ), '')
         )
-        FROM valsi v
-        WHERE d.valsiid = COALESCE(NEW.valsiid, OLD.valsiid)
-        AND d.valsiid = v.valsiid;
+        WHERE definitions.valsiid = COALESCE(NEW.valsiid, OLD.valsiid);
     ELSIF TG_TABLE_NAME = 'users' THEN
         -- Update cached_username when username changes
-        UPDATE definitions d
+        UPDATE definitions
         SET cached_username = NEW.username
-        WHERE d.userid = NEW.userid;
+        WHERE definitions.userid = NEW.userid;
     ELSIF TG_TABLE_NAME = 'languages' THEN
         -- Update cached_langrealname when language name changes
-        UPDATE definitions d
+        UPDATE definitions
         SET cached_langrealname = NEW.realname
-        WHERE d.langid = NEW.langid;
+        WHERE definitions.langid = NEW.langid;
     ELSIF TG_TABLE_NAME = 'valsitypes' THEN
         -- Update cached_type_name when type descriptor changes
-        UPDATE definitions d
+        UPDATE definitions
         SET cached_type_name = NEW.descriptor
         FROM valsi v
-        WHERE d.valsiid = v.valsiid
+        WHERE definitions.valsiid = v.valsiid
         AND v.typeid = NEW.typeid;
     END IF;
     
