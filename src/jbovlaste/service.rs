@@ -844,7 +844,6 @@ pub async fn fast_search_definitions(
     // word_type condition needs to increment param_num too (using cached field)
     if params.word_type.is_some() {
         conditions.push(format!("AND d.cached_typeid = ${}", current_param_num));
-        current_param_num += 1;
     }
 
     let additional_conditions = conditions.join(" ");
