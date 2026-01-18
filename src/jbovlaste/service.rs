@@ -411,7 +411,8 @@ pub async fn search_definitions(
                 COALESCE(cc.comment_count, 0) as comment_count,
                 (di.definition_id IS NOT NULL) as has_image,
                 CASE
-                    WHEN d.cached_valsiword = $1 THEN 12
+                    WHEN d.cached_valsiword = $1 THEN 13
+                    WHEN d.cached_search_text ~* $3 THEN 12
                     WHEN d.cached_valsiword ILIKE $1 THEN 11
                     WHEN d.cached_valsiword ~* $3 THEN 10
                     WHEN d.cached_rafsi IS NOT NULL AND $1 = ANY(string_to_array(d.cached_rafsi, ' ')) THEN 9
@@ -471,7 +472,8 @@ pub async fn search_definitions(
                 COALESCE(dv.score, 0) as score,
                 (di.definition_id IS NOT NULL) as has_image,
                 CASE
-                    WHEN d.cached_valsiword = $1 THEN 12
+                    WHEN d.cached_valsiword = $1 THEN 13
+                    WHEN d.cached_search_text ~* $3 THEN 12
                     WHEN d.cached_valsiword ILIKE $1 THEN 11
                     WHEN d.cached_valsiword ~* $3 THEN 10
                     WHEN d.cached_rafsi IS NOT NULL AND $1 = ANY(string_to_array(d.cached_rafsi, ' ')) THEN 9
@@ -630,7 +632,8 @@ pub async fn search_definitions(
     WITH ranked_results AS (
         SELECT d.definitionid,
             CASE
-                WHEN d.cached_valsiword = $1 THEN 12
+                WHEN d.cached_valsiword = $1 THEN 13
+                WHEN d.cached_search_text ~* $3 THEN 12
                 WHEN d.cached_valsiword ILIKE $1 THEN 11
                 WHEN d.cached_valsiword ~* $3 THEN 10
                 WHEN d.cached_rafsi IS NOT NULL AND $1 = ANY(string_to_array(d.cached_rafsi, ' ')) THEN 9
@@ -648,7 +651,7 @@ pub async fn search_definitions(
               AND (d.langid = ANY($4) OR $4 IS NULL)
               {}
     )
-    SELECT COUNT(DISTINCT definitionid)
+    SELECT COUNT(definitionid)
     FROM ranked_results
     WHERE rank > 0"#,
         count_additional
@@ -682,6 +685,7 @@ pub async fn fast_search_definitions(
 
     let offset = (params.page - 1) * params.per_page;
     let like_pattern = format!("%{}%", params.search_term);
+    let word_boundary_pattern = format!(r"\y{}\y", params.search_term);
 
     // Convert Option<Vec<i32>> to Option<&[i32]> for Postgres
     let languages_slice: Option<&[i32]> = params.languages.as_deref();
@@ -699,12 +703,13 @@ pub async fn fast_search_definitions(
         _ => "ASC",
     };
 
-    // Start with base parameters (will be $1-$4)
-    // Order: $1=search_term, $2=like_pattern, $3=languages_slice, $4=source_langid_value
+    // Start with base parameters (will be $1-$5)
+    // Order: $1=search_term, $2=like_pattern, $3=word_boundary_pattern, $4=languages_slice, $5=source_langid_value
     let source_langid_value = params.source_langid.unwrap_or(1);
     let mut query_params: Vec<&(dyn tokio_postgres::types::ToSql + Sync)> = vec![
         &params.search_term,
         &like_pattern,
+        &word_boundary_pattern,
         &languages_slice,
         &source_langid_value,
     ];
@@ -752,7 +757,8 @@ pub async fn fast_search_definitions(
             d.cached_type_name as type_name,
             0.0::real as score,
             CASE
-                WHEN d.cached_valsiword = $1::text THEN 10
+                WHEN d.cached_valsiword = $1 THEN 13
+                WHEN d.cached_search_text ~* $3::text THEN 10
                 WHEN d.cached_valsiword ILIKE $1::text THEN 9
                 WHEN d.cached_rafsi IS NOT NULL AND $1::text = ANY(string_to_array(d.cached_rafsi, ' ')) THEN 8
                 WHEN d.cached_valsiword ILIKE $2::text THEN 7
@@ -761,8 +767,8 @@ pub async fn fast_search_definitions(
             END as rank
         FROM definitions d
         WHERE d.cached_search_text ILIKE $2::text
-        AND (d.langid = ANY($3::int4[]) OR $3::int4[] IS NULL)
-        AND d.cached_source_langid = $4::int4
+        AND (d.langid = ANY($4::int4[]) OR $4::int4[] IS NULL)
+        AND d.cached_source_langid = $5::int4
         {additional_conditions}
         ORDER BY rank DESC, {} {}
         LIMIT {} OFFSET {}"#,
@@ -850,7 +856,7 @@ pub async fn fast_search_definitions(
 
     let count_query = format!(
         r#"
-    SELECT COUNT(DISTINCT d.definitionid)
+    SELECT COUNT(d.definitionid)
     FROM definitions d
     WHERE {base_conditions} {additional_conditions}"#
     );
