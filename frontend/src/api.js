@@ -32,24 +32,16 @@ api.interceptors.response.use(
     const originalRequest = error.config
 
     if (error.response?.status === 401 && !originalRequest._retry) {
-      // If the failed request was the login attempt itself, don't try to refresh.
-      // Just reject the promise so the login page can handle the error.
-      if (originalRequest.url === '/auth/login') {
-        return Promise.reject(error);
-      }
-
-      // If the failed request was to /auth/logout, don't try to refresh.
-      // The logout() function will handle client-side cleanup.
-      // Rejecting here allows the logout() function's catch block to handle it.
-      if (originalRequest.url === '/auth/logout') {
-        return Promise.reject(error);
-      }
-
-      if (originalRequest.url === '/auth/refresh' && error.response?.data === 'Invalid token') {
-        if (authInstance) {
-          authInstance.logout()
+      // Don't try to refresh for auth-related endpoints
+      const isAuthEndpoint = originalRequest.url === '/auth/login' || 
+                            originalRequest.url === '/auth/logout' || 
+                            originalRequest.url === '/auth/refresh';
+      
+      if (isAuthEndpoint) {
+        if (originalRequest.url === '/auth/refresh' && authInstance) {
+          authInstance.logout();
         }
-        return Promise.reject(error)
+        return Promise.reject(error);
       }
 
       if (isRefreshing) {

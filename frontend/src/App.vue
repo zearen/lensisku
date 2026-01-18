@@ -389,7 +389,6 @@ onMounted(() => {
   handleResize() // Check initial size
 
   document.addEventListener('click', handleClickOutside)
-  auth.checkAuthStatus()
 
   // Cleanup
   return () => {

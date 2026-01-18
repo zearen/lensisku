@@ -1,5 +1,3 @@
-use std::error::Error;
-
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
@@ -137,17 +135,6 @@ pub struct NaturalEntry {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub collection_note: Option<String>,
 }
-
-#[derive(Debug)]
-pub struct DictionaryError(Box<dyn Error + Send + Sync>);
-
-impl std::fmt::Display for DictionaryError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.0)
-    }
-}
-
-impl Error for DictionaryError {}
 
 #[derive(Serialize, Deserialize, ToSchema)]
 pub struct CachedExport {

@@ -29,9 +29,7 @@ export function provideAuth() {
 
   // Initialize auth state immediately
   setTimeout(() => {
-    checkAuthStatus().finally(() => {
-      state.isLoading = false;
-    });
+    checkAuthStatus();
   }, 0);
 
   let refreshTimer = null;

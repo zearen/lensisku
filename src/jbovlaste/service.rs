@@ -750,19 +750,19 @@ pub async fn fast_search_definitions(
             d.cached_username as username,
             d.cached_langrealname as langrealname,
             d.cached_type_name as type_name,
-            0 as score,
+            0.0::real as score,
             CASE
-                WHEN d.cached_valsiword = $1 THEN 10
-                WHEN d.cached_valsiword ILIKE $1 THEN 9
-                WHEN d.cached_rafsi IS NOT NULL AND $1 = ANY(string_to_array(d.cached_rafsi, ' ')) THEN 8
-                WHEN d.cached_valsiword ILIKE $2 THEN 7
-                WHEN d.cached_search_text ILIKE $2 THEN 6
+                WHEN d.cached_valsiword = $1::text THEN 10
+                WHEN d.cached_valsiword ILIKE $1::text THEN 9
+                WHEN d.cached_rafsi IS NOT NULL AND $1::text = ANY(string_to_array(d.cached_rafsi, ' ')) THEN 8
+                WHEN d.cached_valsiword ILIKE $2::text THEN 7
+                WHEN d.cached_search_text ILIKE $2::text THEN 6
                 ELSE 0
             END as rank
         FROM definitions d
-        WHERE d.cached_search_text ILIKE $2
-        AND (d.langid = ANY($3) OR $3 IS NULL)
-        AND d.cached_source_langid = $4
+        WHERE d.cached_search_text ILIKE $2::text
+        AND (d.langid = ANY($3::int4[]) OR $3::int4[] IS NULL)
+        AND d.cached_source_langid = $4::int4
         {additional_conditions}
         ORDER BY rank DESC, {} {}
         LIMIT {} OFFSET {}"#,
@@ -821,13 +821,14 @@ pub async fn fast_search_definitions(
     }
 
     // Count query - simplified using cached_search_text, no JOINs
-    let base_conditions = r#"d.cached_search_text ILIKE $2
-                  AND (d.langid = ANY($3) OR $3 IS NULL)
-                  AND d.cached_source_langid = $4"#;
+    // Parameters: $1=like_pattern, $2=languages_slice, $3=source_langid_value
+    let base_conditions = r#"d.cached_search_text ILIKE $1::text
+                  AND (d.langid = ANY($2) OR $2 IS NULL)
+                  AND d.cached_source_langid = $3"#;
 
     // Build dynamic conditions with correct parameter numbering
     let mut conditions = vec![];
-    let mut current_param_num = 5; // Start from 5 since we now use 1-4 in base
+    let mut current_param_num = 4; // Start from 4 since we use 1-3 in base
 
     if params.selmaho.is_some() {
         conditions.push(format!("AND d.selmaho = ${}", current_param_num));
@@ -855,25 +856,24 @@ pub async fn fast_search_definitions(
     WHERE {base_conditions} {additional_conditions}"#
     );
 
-    // Create params for count query
+    // Create params for count query - no search_term needed, only like_pattern
     let mut count_params: Vec<&(dyn tokio_postgres::types::ToSql + Sync)> = vec![
-        &params.search_term,    // $1
-        &like_pattern,          // $2
-        &languages_slice,       // $3
-        &source_langid_value,   // $4 (Now part of base_conditions)
+        &like_pattern,          // $1
+        &languages_slice,       // $2
+        &source_langid_value,   // $3
     ];
 
     // Add conditional parameters in the correct order, matching additional_conditions logic
     if let Some(selmaho) = &params.selmaho {
-        count_params.push(selmaho); // $6 if present
+        count_params.push(selmaho);
     }
     if let Some(username) = &params.username {
-        count_params.push(username); // $7 if selmaho present, else $6
+        count_params.push(username);
     }
     let word_type_value; // Temporary storage needed outside the if block
     if let Some(word_type) = params.word_type {
         word_type_value = word_type;
-        count_params.push(&word_type_value); // $8/$7/$6 depending on others
+        count_params.push(&word_type_value);
     }
 
     let total: i64 = transaction
