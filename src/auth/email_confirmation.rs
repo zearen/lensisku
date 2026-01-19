@@ -16,7 +16,7 @@ pub async fn confirm_email(
     // Find user with this token
     let user = transaction
         .query_opt(
-            "SELECT userid, email_confirmation_sent_at 
+            "SELECT userid, email, email_confirmation_sent_at 
              FROM users 
              WHERE email_confirmation_token = $1
              AND email_confirmed = false",
