@@ -196,7 +196,7 @@
         </router-view>
       </div>
 
-      <footer class="mt-auto text-center text-xs text-gray-500 leading-relaxed">
+      <footer class="mt-6 text-center text-xs text-gray-500 leading-relaxed">
         {{ $t('footer.publicDomainNotice') }}
       </footer>
     </div>
