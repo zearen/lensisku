@@ -187,7 +187,7 @@
                       <span class="text-base group-hover:scale-110 transition-transform mb-1">{{
                         emoji.symbol
                       }}</span>
-                      <span class="text-xs text-gray-600 text-center break-all">{{ t(`components.commentItem.reactions.${emoji.meaning.toLowerCase().replace(/\s+/g, '')}`) }}</span>
+                      <span class="text-xs text-gray-600 text-center break-words" :lang="locale" style="hyphens: auto;">{{ t(`components.commentItem.reactions.${emoji.meaning.toLowerCase().replace(/\s+/g, '')}`) }}</span>
                     </div>
                   </button>
                 </div>
