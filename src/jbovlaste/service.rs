@@ -412,7 +412,8 @@ pub async fn search_definitions(
                 (di.definition_id IS NOT NULL) as has_image,
                 CASE
                     WHEN d.cached_valsiword = $1 THEN 13
-                    WHEN d.cached_search_text ~* $3 THEN 12
+                    WHEN d.cached_glosswords IS NOT NULL AND d.cached_glosswords != '' 
+                         AND LOWER($1) = ANY(string_to_array(d.cached_glosswords, ' ')) THEN 12
                     WHEN d.cached_valsiword ILIKE $1 THEN 11
                     WHEN d.cached_valsiword ~* $3 THEN 10
                     WHEN d.cached_rafsi IS NOT NULL AND $1 = ANY(string_to_array(d.cached_rafsi, ' ')) THEN 9
@@ -473,7 +474,8 @@ pub async fn search_definitions(
                 (di.definition_id IS NOT NULL) as has_image,
                 CASE
                     WHEN d.cached_valsiword = $1 THEN 13
-                    WHEN d.cached_search_text ~* $3 THEN 12
+                    WHEN d.cached_glosswords IS NOT NULL AND d.cached_glosswords != '' 
+                         AND LOWER($1) = ANY(string_to_array(d.cached_glosswords, ' ')) THEN 12
                     WHEN d.cached_valsiword ILIKE $1 THEN 11
                     WHEN d.cached_valsiword ~* $3 THEN 10
                     WHEN d.cached_rafsi IS NOT NULL AND $1 = ANY(string_to_array(d.cached_rafsi, ' ')) THEN 9
@@ -633,7 +635,8 @@ pub async fn search_definitions(
         SELECT d.definitionid,
             CASE
                 WHEN d.cached_valsiword = $1 THEN 13
-                WHEN d.cached_search_text ~* $3 THEN 12
+                WHEN d.cached_glosswords IS NOT NULL AND d.cached_glosswords != '' 
+                     AND LOWER($1) = ANY(string_to_array(d.cached_glosswords, ' ')) THEN 12
                 WHEN d.cached_valsiword ILIKE $1 THEN 11
                 WHEN d.cached_valsiword ~* $3 THEN 10
                 WHEN d.cached_rafsi IS NOT NULL AND $1 = ANY(string_to_array(d.cached_rafsi, ' ')) THEN 9
@@ -757,12 +760,14 @@ pub async fn fast_search_definitions(
             d.cached_type_name as type_name,
             0.0::real as score,
             CASE
-                WHEN d.cached_valsiword = $1 THEN 13
-                WHEN d.cached_search_text ~* $3::text THEN 10
-                WHEN d.cached_valsiword ILIKE $1::text THEN 9
-                WHEN d.cached_rafsi IS NOT NULL AND $1::text = ANY(string_to_array(d.cached_rafsi, ' ')) THEN 8
-                WHEN d.cached_valsiword ILIKE $2::text THEN 7
-                WHEN d.cached_search_text ILIKE $2::text THEN 6
+                WHEN d.cached_valsiword = $1::text THEN 13
+                WHEN d.cached_glosswords IS NOT NULL AND d.cached_glosswords != '' 
+                     AND LOWER($1::text) = ANY(string_to_array(d.cached_glosswords, ' ')) THEN 12
+                WHEN d.cached_valsiword ILIKE $1::text THEN 11
+                WHEN d.cached_valsiword ~* $3::text THEN 10
+                WHEN d.cached_rafsi IS NOT NULL AND $1::text = ANY(string_to_array(d.cached_rafsi, ' ')) THEN 9
+                WHEN d.cached_valsiword ILIKE $2::text THEN 8
+                WHEN d.cached_search_text ILIKE $2::text THEN 7
                 ELSE 0
             END as rank
         FROM definitions d
