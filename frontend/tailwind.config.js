@@ -247,7 +247,7 @@ export default {
             '@apply btn-base text-red-700 bg-red-50 enabled:hover:bg-red-200 border-red-600': {},
           },
           '.btn-get': {
-            '@apply btn-base text-blue-500 bg-slate-50 enabled:hover:bg-slate-200 border-blue-300':
+            '@apply btn-base text-blue-500 bg-slate-50 enabled:hover:bg-slate-200 border-blue-400':
               {},
           },
           '.btn-market': {
