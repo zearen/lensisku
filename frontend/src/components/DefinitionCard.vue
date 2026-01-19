@@ -456,10 +456,11 @@ const confirmDelete = async () => {
   if (!props.definition.definitionid) return
   isDeleting.value = true
   try {
+    const valsiWord = props.definition.valsiword ?? props.definition.word
     await deleteDefinition(props.definition.definitionid)
     emit('refresh-definitions') // Notify parent to refresh the list
     showDeleteConfirm.value = false
-    router.push("/")
+    router.push(`/valsi/${valsiWord}`)
   } catch (error) {
     console.error('Error deleting definition:', error)
     // Optionally show an error message to the user
