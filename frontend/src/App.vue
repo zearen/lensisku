@@ -250,7 +250,7 @@ import {
   GalleryVerticalEnd
 } from 'lucide-vue-next'
 import { Menu } from 'lucide-vue-next' // Explicitly import Menu if it was missed by auto-sort
-import { ref, onMounted, watch, computed } from 'vue'
+import { ref, onMounted, onBeforeUnmount, watch, computed, nextTick } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 
 import { useI18n } from 'vue-i18n'
@@ -376,26 +376,6 @@ const handleClickOutside = (event) => {
   }
 }
 
-onMounted(() => {
-  // Close mobile menu when window resizes to desktop width
-  const handleResize = () => {
-    if (window.innerWidth >= 640) {
-      // sm breakpoint
-      isMenuOpen.value = false
-    }
-  }
-
-  window.addEventListener('resize', handleResize)
-  handleResize() // Check initial size
-
-  document.addEventListener('click', handleClickOutside)
-
-  // Cleanup
-  return () => {
-    window.removeEventListener('resize', handleResize)
-    document.removeEventListener('click', handleClickOutside)
-  }
-})
 
 watch(() => route.query, syncFromRoute, { deep: true })
 
@@ -436,6 +416,94 @@ const setLocale = (newLocale) => {
     router.push(`/${newLocale}`)
   }
 }
+
+// Global keyboard handler for "/" key to navigate to homepage and focus search
+const handleGlobalKeyDown = async (event) => {
+  // Only handle "/" key
+  if (event.key !== '/') {
+    return
+  }
+
+  // Don't trigger if user is typing in an input, textarea, or select
+  const activeElement = document.activeElement
+  const tagName = activeElement?.tagName
+  const isContentEditable = activeElement?.isContentEditable
+  
+  if (['INPUT', 'TEXTAREA', 'SELECT'].includes(tagName) || isContentEditable) {
+    return
+  }
+
+  // Prevent default behavior
+  event.preventDefault()
+
+  // Get current locale from route or use default
+  const currentPath = route.path
+  const localeMatch = currentPath.match(localeCaptureGroupRegex)
+  const currentLocale = localeMatch ? localeMatch[1] : $locale.value || 'en'
+  
+  // Check if we're already on the homepage
+  const isHomePage = route.name === 'Home' || route.name?.startsWith('Home-')
+  
+  // Navigate to homepage if not already there
+  if (!isHomePage) {
+    await router.push(`/${currentLocale}`)
+  }
+
+  // Focus the search input after navigation
+  // Wait for the route to update and component to mount
+  await nextTick()
+  
+  // Try multiple times to find the search input as the component might need time to mount
+  const focusSearchInput = () => {
+    // Try to find the search input in the SearchForm component
+    // The search form has class "search-form" and contains an input
+    const searchInput = document.querySelector('.search-form input[type="text"], .search-form input:not([type="hidden"])')
+    if (searchInput) {
+      searchInput.focus()
+      return true
+    }
+    return false
+  }
+  
+  // Try immediately
+  if (!focusSearchInput()) {
+    // If not found, try again after a short delay to allow component to mount
+    setTimeout(() => {
+      if (!focusSearchInput()) {
+        // Final fallback: try to find any input with input-field class in the main content area
+        const fallbackInput = document.querySelector('main .input-field[type="text"], main input.input-field:not([type="hidden"])')
+        if (fallbackInput) {
+          fallbackInput.focus()
+        }
+      }
+    }, 150)
+  }
+}
+
+onMounted(() => {
+  // Close mobile menu when window resizes to desktop width
+  const handleResize = () => {
+    if (window.innerWidth >= 640) {
+      // sm breakpoint
+      isMenuOpen.value = false
+    }
+  }
+
+  window.addEventListener('resize', handleResize)
+  handleResize() // Check initial size
+
+  document.addEventListener('click', handleClickOutside)
+  
+  // Add global keyboard handler for "/" key
+  window.addEventListener('keydown', handleGlobalKeyDown)
+
+  // Cleanup
+  return () => {
+    window.removeEventListener('resize', handleResize)
+    document.removeEventListener('click', handleClickOutside)
+    window.removeEventListener('keydown', handleGlobalKeyDown)
+  }
+})
 </script>
 
 <style>
