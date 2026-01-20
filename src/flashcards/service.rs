@@ -1705,7 +1705,7 @@ pub async fn import_from_collection(
         let flashcard_id: i32 = transaction
             .query_one(
                 "INSERT INTO flashcards (collection_id, position, item_id, direction)
-                 VALUES ($1, $2, $3, $4, $5)
+                 VALUES ($1, $2, $3, $4)
                  RETURNING id",
                 &[
                     &collection_id,
