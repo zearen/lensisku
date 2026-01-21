@@ -337,18 +337,22 @@ fn latex_preamble_roman_fonts() -> String {
 }
 
 fn latex_preamble_cjk_fonts(lang: &str) -> String {
-    if lang == JAPANESE {
-        r#"
+    match lang {
+        JAPANESE => r#"
 \usepackage{xeCJK}
 \setCJKmainfont{Noto Serif CJK JP}
 \setCJKsansfont{Noto Sans CJK JP}
 \setCJKmonofont{Noto Sans Mono CJK JP}"#
-            .to_string()
-    } else {
-        r#"
+            .to_string(),
+        "hi" => r#"
+\usepackage{ucharclasses}
+\newfontfamily\devanagarifont{Noto Serif Devanagari}
+\setTransitionsFor{Devanagari}{\devanagarifont}{\rmfamily}"#
+            .to_string(),
+        _ => r#"
 \usepackage{xeCJK}
 \setCJKmainfont[Mapping=tex-text]{Noto Sans CJK SC}"#
-            .to_string()
+            .to_string(),
     }
 }
 
