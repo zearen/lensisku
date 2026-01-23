@@ -30,6 +30,7 @@
           </select>
           <ChevronDown class="h-4 w-4 text-gray-400 absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none" />
         </div>
+        <!--
         <RouterLink
           v-if="isOwnProfile"
           to="/balance"
@@ -38,6 +39,7 @@
           <Wallet class="h-4 w-4" />
           {{ t('profile.balance') }}
         </RouterLink>
+        -->
         <RouterLink
           v-if="isOwnProfile"
           to="/change-password"
