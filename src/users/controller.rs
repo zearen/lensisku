@@ -98,6 +98,9 @@ pub async fn get_user_definitions(
 
     match service::get_user_definitions(&pool, &username, page, per_page).await {
         Ok(response) => HttpResponse::Ok().json(response),
+        Err(e) if e.to_string() == "User not found" => {
+            HttpResponse::NotFound().body("User not found")
+        }
         Err(e) => HttpResponse::InternalServerError().body(e.to_string()),
     }
 }
@@ -128,6 +131,9 @@ pub async fn get_user_comments(
 
     match service::get_user_comments(&pool, &username, page, per_page).await {
         Ok(response) => HttpResponse::Ok().json(response),
+        Err(e) if e.to_string() == "User not found" => {
+            HttpResponse::NotFound().body("User not found")
+        }
         Err(e) => HttpResponse::InternalServerError().body(e.to_string()),
     }
 }
