@@ -172,10 +172,10 @@ pub async fn create_role(
         .await
         .map_err(|e| AppError::Database(e.to_string()))?;
 
-    // Check if role already exists
+    // Check if role already exists (case-insensitive)
     let role_exists: bool = transaction
         .query_one(
-            "SELECT EXISTS (SELECT 1 FROM role_permissions WHERE role = $1)",
+            "SELECT EXISTS (SELECT 1 FROM role_permissions WHERE LOWER(role::text) = LOWER($1::text))",
             &[&request.name],
         )
         .await?
@@ -244,13 +244,13 @@ pub async fn update_role(
         .await
         .map_err(|e| AppError::Database(e.to_string()))?;
 
-    // Get actor's permissions
+    // Get actor's permissions (case-insensitive role lookup)
     let actor_permissions: Vec<String> = transaction
         .query(
             "SELECT p.name 
              FROM role_permissions rp
              JOIN permissions p ON rp.permission_id = p.id
-             WHERE rp.role = $1",
+             WHERE LOWER(rp.role::text) = LOWER($1::text)",
             &[&actor_role],
         )
         .await?
@@ -268,10 +268,10 @@ pub async fn update_role(
         }
     }
 
-    // Clear existing permissions
+    // Clear existing permissions (case-insensitive)
     transaction
         .execute(
-            "DELETE FROM role_permissions WHERE role = $1",
+            "DELETE FROM role_permissions WHERE LOWER(role::text) = LOWER($1::text)",
             &[&role_name],
         )
         .await?;
@@ -310,18 +310,18 @@ pub async fn delete_role(pool: &Pool, role_name: &str) -> AppResult<()> {
         .map_err(|e| AppError::Database(e.to_string()))?;
     let transaction = client.transaction().await?;
 
-    // Convert users to default 'user' role
+    // Convert users to default 'user' role (case-insensitive)
     transaction
         .execute(
-            "UPDATE users SET role = 'user' WHERE role = $1",
+            "UPDATE users SET role = 'user' WHERE LOWER(role::text) = LOWER($1::text)",
             &[&role_name],
         )
         .await?;
 
-    // Remove role permissions
+    // Remove role permissions (case-insensitive)
     transaction
         .execute(
-            "DELETE FROM role_permissions WHERE role = $1",
+            "DELETE FROM role_permissions WHERE LOWER(role::text) = LOWER($1::text)",
             &[&role_name],
         )
         .await?;
@@ -342,14 +342,14 @@ pub async fn block_user(
         .map_err(|e| AppError::Database(e.to_string()))?;
     let transaction = client.transaction().await?;
 
-    // Check if actor has block_users permission
+    // Check if actor has block_users permission (case-insensitive role comparison)
     let has_block_users: bool = transaction
         .query_one(
             "SELECT EXISTS (
                 SELECT 1 
                 FROM role_permissions rp
                 JOIN permissions p ON rp.permission_id = p.id
-                JOIN users u ON rp.role = u.role
+                JOIN users u ON LOWER(rp.role::text) = LOWER(u.role::text)
                 WHERE u.userid = $1 AND p.name = 'block_users'
             )",
             &[&actor_id],
@@ -363,14 +363,14 @@ pub async fn block_user(
         ));
     }
 
-    // Check if target user has manage_users permission
+    // Check if target user has manage_users permission (case-insensitive role comparison)
     let target_has_manage_users: bool = transaction
         .query_one(
             "SELECT EXISTS (
                 SELECT 1 
                 FROM role_permissions rp
                 JOIN permissions p ON rp.permission_id = p.id
-                JOIN users u ON rp.role = u.role
+                JOIN users u ON LOWER(rp.role::text) = LOWER(u.role::text)
                 WHERE u.userid = $1 AND p.name = 'manage_users'
             )",
             &[&target_user_id],
@@ -423,7 +423,7 @@ pub async fn assign_role(
                 SELECT 1 
                 FROM role_permissions rp
                 JOIN permissions p ON rp.permission_id = p.id
-                JOIN users u ON rp.role = u.role
+                JOIN users u ON LOWER(rp.role::text) = LOWER(u.role::text)
                 WHERE u.userid = $1 AND p.name = 'manage_roles'
             )",
             &[&assigner_id],
@@ -437,13 +437,13 @@ pub async fn assign_role(
         ));
     }
 
-    // Get assigner's permissions
+    // Get assigner's permissions (case-insensitive role comparison)
     let assigner_perms: Vec<String> = transaction
         .query(
             "SELECT p.name 
              FROM role_permissions rp
              JOIN permissions p ON rp.permission_id = p.id
-             JOIN users u ON rp.role = u.role
+             JOIN users u ON LOWER(rp.role::text) = LOWER(u.role::text)
              WHERE u.userid = $1",
             &[&assigner_id],
         )
@@ -452,13 +452,13 @@ pub async fn assign_role(
         .map(|row| row.get("name"))
         .collect();
 
-    // Get target role's permissions
+    // Get target role's permissions (case-insensitive role lookup)
     let target_role_perms: Vec<String> = transaction
         .query(
             "SELECT p.name 
              FROM role_permissions rp
              JOIN permissions p ON rp.permission_id = p.id
-             WHERE rp.role = $1",
+             WHERE LOWER(rp.role::text) = LOWER($1::text)",
             &[&new_role],
         )
         .await?
@@ -1154,13 +1154,14 @@ pub async fn create_token_pair(
     session_id: Option<Uuid>,
 ) -> AppResult<TokenPair> {
     // Get permissions for the user's role (map potential errors)
+    // Use case-insensitive role comparison
     let client = pool.get().await?;
     let permissions = client
         .query(
             "SELECT p.name
          FROM role_permissions rp
          JOIN permissions p ON rp.permission_id = p.id
-         WHERE rp.role = $1",
+         WHERE LOWER(rp.role::text) = LOWER($1::text)",
             &[&user.role],
         )
         .await?;

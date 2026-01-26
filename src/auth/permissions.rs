@@ -39,11 +39,13 @@ impl PermissionCache {
         let mut cache = HashMap::new();
         for row in rows {
             let role: String = row.get("role");
+            // Normalize role to lowercase for case-insensitive lookups
+            let role_lower = role.to_lowercase();
             let permission = Permission {
                 name: row.get("name"),
                 description: row.get("description"),
             };
-            cache.entry(role).or_insert_with(Vec::new).push(permission);
+            cache.entry(role_lower).or_insert_with(Vec::new).push(permission);
         }
 
         let mut write_cache = self.cache.write().await;
@@ -54,15 +56,19 @@ impl PermissionCache {
 
     pub async fn has_permission(&self, role: String, permission_name: &str) -> bool {
         let cache = self.cache.read().await;
+        // Normalize role to lowercase for case-insensitive lookup
+        let role_lower = role.to_lowercase();
         cache
-            .get(&role)
+            .get(&role_lower)
             .map(|perms| perms.iter().any(|p| p.name == permission_name))
             .unwrap_or(false)
     }
 
     pub async fn get_permissions_for_role(&self, role: String) -> Vec<Permission> {
         let cache = self.cache.read().await;
-        cache.get(&role).map(|v| v.to_vec()).unwrap_or_default()
+        // Normalize role to lowercase for case-insensitive lookup
+        let role_lower = role.to_lowercase();
+        cache.get(&role_lower).map(|v| v.to_vec()).unwrap_or_default()
     }
 }
 
