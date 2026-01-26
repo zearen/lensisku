@@ -16,6 +16,21 @@
       {{ $t('discord') }}
     </a>
   </div>
+  <div v-if="showUnconfirmedWarning"
+    class="select-none top-14 md:top-12 opacity-90 fixed w-full mx-auto left-0 right-0 z-10 text-sm py-2 px-4 text-center border bg-yellow-100 border-yellow-300">
+    <div class="max-w-4xl mx-auto flex items-center justify-center gap-2 flex-wrap">
+      <span>{{ $t('unconfirmedWarning') }}</span>
+      <button
+        @click="handleResendConfirmation"
+        :disabled="isResendingConfirmation"
+        class="text-blue-600 hover:text-blue-800 underline font-medium disabled:opacity-50 disabled:cursor-not-allowed">
+        {{ isResendingConfirmation ? $t('emailConfirmation.sending') : $t('unconfirmedWarningLink') }}
+      </button>
+      <span v-if="resendConfirmationSuccess" class="text-green-600 text-xs">
+        {{ $t('emailConfirmation.requestSuccess') }}
+      </span>
+    </div>
+  </div>
   <!-- Mobile-optimized header -->
   <header class="bg-white border-b border-gray-200 sticky top-0 z-40">
     <div class="px-1 sm:px-2 max-w-4xl mx-auto">
@@ -254,8 +269,10 @@ import { ref, onMounted, onBeforeUnmount, watch, computed, nextTick } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 
 import { useI18n } from 'vue-i18n'
+import { jwtDecode } from 'jwt-decode'
 
 import Error from '@/components/Error.vue'
+import { resendConfirmation } from '@/api'
 import CoursesIcon from '@/components/icons/CoursesIcon.vue'
 import IconButton from '@/components/icons/IconButton.vue'
 
@@ -283,6 +300,14 @@ const showActionModal = ref(false)
 const showPyro = ref(false)
 const discordChatUrl = 'https://discord.gg/4KhzRzpmVr'
 const showTestDataWarning = import.meta.env.VITE_SHOW_TEST_DATA_WARNING === 'true'
+const isResendingConfirmation = ref(false)
+const resendConfirmationSuccess = ref(false)
+
+const showUnconfirmedWarning = computed(() => {
+  return auth.state.isLoggedIn && 
+         !auth.state.isLoading && 
+         (auth.state.role === 'Unconfirmed' || !auth.state.email_confirmed)
+})
 
 const rnd = (max, min = 1) => ((Math.random() * max) / min).toFixed(2)
 
@@ -346,6 +371,45 @@ const handleLogout = () => {
   auth.logout()
   router.push('/login')
   isMenuOpen.value = false
+}
+
+const handleResendConfirmation = async () => {
+  if (isResendingConfirmation.value) return
+  
+  try {
+    // Get email from JWT token
+    const accessToken = auth.state.accessToken || localStorage.getItem('accessToken')
+    if (!accessToken) {
+      console.error('No access token available')
+      return
+    }
+    
+    const decoded = jwtDecode(accessToken)
+    const email = decoded.email
+    
+    if (!email) {
+      console.error('No email found in token')
+      return
+    }
+    
+    isResendingConfirmation.value = true
+    resendConfirmationSuccess.value = false
+    
+    const response = await resendConfirmation(email)
+    
+    if (response.data.success) {
+      resendConfirmationSuccess.value = true
+      // Hide success message after 5 seconds
+      setTimeout(() => {
+        resendConfirmationSuccess.value = false
+      }, 5000)
+    }
+  } catch (err) {
+    console.error('Failed to resend confirmation email:', err)
+    // Error handling could be improved with a toast notification
+  } finally {
+    isResendingConfirmation.value = false
+  }
 }
 
 const viewMessage = (messageId) => {

@@ -125,6 +125,8 @@
   },
   "testDataWarning": "For tests only (data are regularly flushed). Report issues on",
   "discord": "Discord",
+  "unconfirmedWarning": "Your email address has not been confirmed. Please check your email and click the confirmation link to activate your account.",
+  "unconfirmedWarningLink": "Resend confirmation email",
   "toggleMenu": "Toggle menu",
   "logoText": "Lens",
   "activityThreads": {

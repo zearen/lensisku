@@ -25,6 +25,8 @@ export function provideAuth() {
     refreshAttempts: 0,
     lastRefreshTime: null,
     authorities: [],
+    role: "",
+    email_confirmed: false,
   });
 
   // Initialize auth state immediately
@@ -105,6 +107,8 @@ export function provideAuth() {
         const decoded = jwtDecode(response.data.access_token);
         state.username = decoded.username; // Update reactive state
         state.authorities = decoded.authorities || []; // Update reactive state
+        state.role = decoded.role || ""; // Update reactive state
+        state.email_confirmed = decoded.email_confirmed || false; // Update reactive state
         localStorage.setItem("username", decoded.username); // Keep localStorage consistent
         scheduleTokenRefresh(decoded.exp);
         return true;
@@ -160,6 +164,8 @@ export function provideAuth() {
     state.refreshAttempts = 0;
     state.lastRefreshTime = null;
     state.authorities = [];
+    state.role = "";
+    state.email_confirmed = false;
 
     if (refreshTimer) {
       clearTimeout(refreshTimer);
@@ -240,9 +246,13 @@ export function provideAuth() {
     const decoded = parseToken(accessToken);
     if (decoded) {
       state.authorities = decoded.authorities || [];
+      state.role = decoded.role || "";
+      state.email_confirmed = decoded.email_confirmed || false;
       scheduleTokenRefresh(decoded.exp);
     } else {
       state.authorities = [];
+      state.role = "";
+      state.email_confirmed = false;
     }
 
     startTokenVerification();
@@ -291,6 +301,8 @@ export function provideAuth() {
         state.isLoggedIn = true;
         state.username = decoded.username;
         state.authorities = decoded.authorities || [];
+        state.role = decoded.role || "";
+        state.email_confirmed = decoded.email_confirmed || false;
         state.accessToken = accessToken;
         state.refreshToken = refreshToken;
 

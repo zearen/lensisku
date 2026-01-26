@@ -96,14 +96,21 @@ const confirmEmailToken = async (token) => {
   try {
     const response = await confirmEmail(token)
 
-    if (response.data.success) {
+    // Check for success field, or if response has message and no error, treat as success
+    if (response.data.success === true || (response.data.message && !response.data.error)) {
       success.value = true
     } else {
       error.value = response.data.error || 'Failed to confirm email'
       isExpired.value = response.data.error?.includes('expired')
     }
   } catch (err) {
-    error.value = t('emailConfirmation.errorConfirming')
+    // Handle HTTP error responses (4xx, 5xx)
+    if (err.response?.data?.error) {
+      error.value = err.response.data.error
+      isExpired.value = err.response.data.error.includes('expired')
+    } else {
+      error.value = t('emailConfirmation.errorConfirming')
+    }
   } finally {
     isLoading.value = false
   }

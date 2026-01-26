@@ -328,19 +328,23 @@ pub async fn confirm_email(
 ) -> impl Responder {
     match email_confirmation::confirm_email(&pool, &req.token, &email_limiter).await {
         Ok(_) => HttpResponse::Ok().json(json!({
+            "success": true,
             "message": "Email confirmed successfully"
         })),
         Err(e) => {
             if e.to_string().contains("expired") {
                 HttpResponse::BadRequest().json(json!({
+                    "success": false,
                     "error": "Confirmation token has expired"
                 }))
             } else if e.to_string().contains("Invalid") {
                 HttpResponse::BadRequest().json(json!({
+                    "success": false,
                     "error": "Invalid confirmation token"
                 }))
             } else {
                 HttpResponse::InternalServerError().json(json!({
+                    "success": false,
                     "error": format!("Failed to confirm email: {}", e)
                 }))
             }
