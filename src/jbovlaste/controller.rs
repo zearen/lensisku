@@ -1125,14 +1125,28 @@ pub async fn delete_definition(
     claims: Claims,
 ) -> impl Responder {
     match service::delete_definition(&pool, id.into_inner(), claims.sub).await {
-        Ok(true) => HttpResponse::Ok().json(json!({
-            "success": true,
-            "message": "Definition deleted successfully"
-        })),
-        Ok(false) => HttpResponse::BadRequest().json(json!({
-            "success": false,
-            "message": "Definition has comments and cannot be deleted"
-        })),
+        Ok(result) => {
+            if !result.definition_deleted {
+                if result.has_remaining_definitions {
+                    HttpResponse::BadRequest().json(json!({
+                        "success": false,
+                        "message": "Definition has comments and cannot be deleted"
+                    }))
+                } else {
+                    HttpResponse::NotFound().json(json!({
+                        "success": false,
+                        "message": "Definition not found"
+                    }))
+                }
+            } else {
+                HttpResponse::Ok().json(json!({
+                    "success": true,
+                    "message": "Definition deleted successfully",
+                    "valsi_deleted": result.valsi_deleted,
+                    "has_remaining_definitions": result.has_remaining_definitions
+                }))
+            }
+        }
         Err(e) => HttpResponse::InternalServerError().json(json!({
             "success": false,
             "message": format!("Failed to delete definition: {}", e)

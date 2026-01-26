@@ -457,10 +457,19 @@ const confirmDelete = async () => {
   isDeleting.value = true
   try {
     const valsiWord = props.definition.valsiword ?? props.definition.word
-    await deleteDefinition(props.definition.definitionid)
+    const response = await deleteDefinition(props.definition.definitionid)
     emit('refresh-definitions') // Notify parent to refresh the list
     showDeleteConfirm.value = false
-    router.push(`/valsi/${valsiWord}`)
+    
+    // Check if valsi was deleted or if there are no remaining definitions
+    const responseData = response.data
+    if (responseData.valsi_deleted || !responseData.has_remaining_definitions) {
+      // Redirect to home page if valsi was deleted or no definitions remain
+      router.push('/')
+    } else {
+      // Redirect to valsi page if definitions still exist
+      router.push(`/valsi/${valsiWord}`)
+    }
   } catch (error) {
     console.error('Error deleting definition:', error)
     // Optionally show an error message to the user

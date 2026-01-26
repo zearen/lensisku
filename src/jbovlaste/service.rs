@@ -3141,13 +3141,40 @@ pub async fn bulk_import_definitions(
     Ok((success_count, error_count))
 }
 
+#[derive(Debug)]
+pub struct DeleteDefinitionResult {
+    pub definition_deleted: bool,
+    pub valsi_deleted: bool,
+    pub has_remaining_definitions: bool,
+}
+
 pub async fn delete_definition(
     pool: &Pool,
     definition_id: i32,
     user_id: i32,
-) -> Result<bool, Box<dyn std::error::Error>> {
+) -> Result<DeleteDefinitionResult, Box<dyn std::error::Error>> {
     let mut client = pool.get().await?;
     let transaction = client.transaction().await?;
+
+    // Get valsi_id before deletion
+    let valsi_id: Option<i32> = transaction
+        .query_opt(
+            "SELECT valsiid FROM definitions WHERE definitionid = $1",
+            &[&definition_id],
+        )
+        .await?
+        .map(|row| row.get::<_, i32>("valsiid"));
+
+    let valsi_id = match valsi_id {
+        Some(id) => id,
+        None => {
+            return Ok(DeleteDefinitionResult {
+                definition_deleted: false,
+                valsi_deleted: false,
+                has_remaining_definitions: false,
+            });
+        }
+    };
 
     // Check if user is the author
     let is_author = transaction
@@ -3177,7 +3204,11 @@ pub async fn delete_definition(
         .get::<_, bool>(0);
 
     if has_comments {
-        return Ok(false);
+        return Ok(DeleteDefinitionResult {
+            definition_deleted: false,
+            valsi_deleted: false,
+            has_remaining_definitions: true,
+        });
     }
 
     // Delete related records first
@@ -3232,9 +3263,69 @@ pub async fn delete_definition(
         )
         .await?;
 
+    if deleted == 0 {
+        transaction.commit().await?;
+        return Ok(DeleteDefinitionResult {
+            definition_deleted: false,
+            valsi_deleted: false,
+            has_remaining_definitions: false,
+        });
+    }
+
+    // Check if there are remaining definitions for this valsi
+    let remaining_definitions_count: i64 = transaction
+        .query_one(
+            "SELECT COUNT(*) FROM definitions WHERE valsiid = $1",
+            &[&valsi_id],
+        )
+        .await?
+        .get(0);
+
+    let has_remaining_definitions = remaining_definitions_count > 0;
+
+    // Check if there are any discussions (threads with comments) for this valsi
+    let has_valsi_discussions: bool = transaction
+        .query_one(
+            "SELECT EXISTS(
+                SELECT 1 FROM threads t
+                WHERE t.valsiid = $1
+                AND EXISTS(SELECT 1 FROM comments c WHERE c.threadid = t.threadid)
+            )",
+            &[&valsi_id],
+        )
+        .await?
+        .get(0);
+
+    let mut valsi_deleted = false;
+
+    // If no remaining definitions and no discussions, delete the valsi
+    if !has_remaining_definitions && !has_valsi_discussions {
+        // Delete valsi subscriptions first
+        transaction
+            .execute(
+                "DELETE FROM valsi_subscriptions WHERE valsi_id = $1",
+                &[&valsi_id],
+            )
+            .await?;
+
+        // Delete the valsi itself
+        let valsi_deleted_count = transaction
+            .execute(
+                "DELETE FROM valsi WHERE valsiid = $1",
+                &[&valsi_id],
+            )
+            .await?;
+
+        valsi_deleted = valsi_deleted_count > 0;
+    }
+
     transaction.commit().await?;
 
-    Ok(deleted > 0)
+    Ok(DeleteDefinitionResult {
+        definition_deleted: true,
+        valsi_deleted,
+        has_remaining_definitions,
+    })
 }
 
 pub async fn add_definition_image(
