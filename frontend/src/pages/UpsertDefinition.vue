@@ -67,32 +67,29 @@
     <div class="flex flex-col sm:flex-row gap-4">
       <!-- Optional Entry Language Selection (Only for new entries) -->
       <div class="flex-1">
-          <label for="source-language" class="block text-sm font-medium text-blue-700">{{
-            t('upsertDefinition.sourceLanguageLabel', 'Entry Language') }} <span class="text-red-500">{{
-              t('upsertDefinition.required') }}</span></label>
-          <select id="source-language" v-model="sourceLangId" required class="input-field w-full h-10"
-            :disabled="isLoading || isSubmitting || isEditMode || prefilledWord"
-            :readonly="prefilledWord || isEditMode">
-            <!-- Default Lojban option -->
-            <option v-for="lang in languages" :key="lang.id" :value="lang.id">
-              {{ lang.real_name }} ({{ lang.english_name }})
-            </option>
-          </select>
-          <p class="mt-1 text-xs text-gray-500">
-            {{ t('upsertDefinition.sourceLanguageNote', `The language the word itself belongs to. Cannot be changed after
-            creation.`) }}
-          </p>
+        <label for="source-language" class="block text-sm font-medium text-blue-700">{{
+          t('upsertDefinition.sourceLanguageLabel', 'Entry Language') }} <span class="text-red-500">{{
+            t('upsertDefinition.required') }}</span></label>
+        <select id="source-language" v-model="sourceLangId" required class="input-field w-full h-10"
+          :disabled="isLoading || isSubmitting || isEditMode || prefilledWord" :readonly="prefilledWord || isEditMode">
+          <!-- Default Lojban option -->
+          <option v-for="lang in languages" :key="lang.id" :value="lang.id">
+            {{ lang.real_name }} ({{ lang.english_name }})
+          </option>
+        </select>
+        <p class="mt-1 text-xs text-gray-500">
+          {{ t('upsertDefinition.sourceLanguageNote', `The language the word itself belongs to. Cannot be changed after
+          creation.`) }}
+        </p>
       </div>
 
       <!-- Language Selection -->
       <div class="flex-1">
         <label for="language" class="block text-sm font-medium text-blue-700">{{ t('upsertDefinition.languageLabel') }}
           <span class="text-red-500">{{ t('upsertDefinition.required') }}</span></label>
-        <select id="language" v-model="langId" required class="input-field w-full h-10"
-          :class="{
-            'border-red-500 focus:ring-red-500 focus:border-red-500': shouldHighlightMissing && missingFields.langId
-          }"
-          :disabled="isLoading || isSubmitting">
+        <select id="language" v-model="langId" required class="input-field w-full h-10" :class="{
+          'border-red-500 focus:ring-red-500 focus:border-red-500': shouldHighlightMissing && missingFields.langId
+        }" :disabled="isLoading || isSubmitting">
           <option value="">
             {{ t('upsertDefinition.selectLanguagePlaceholder') }}
           </option>
@@ -107,7 +104,7 @@
     <div>
       <div class="flex items-center justify-between">
         <label for="definition" class="block text-sm font-medium text-blue-700">{{ t('upsertDefinition.definitionLabel')
-          }} <span class="text-red-500">{{ t('upsertDefinition.required') }}</span></label>
+        }} <span class="text-red-500">{{ t('upsertDefinition.required') }}</span></label>
         <span class="text-xs text-gray-500">{{ t('upsertDefinition.requiredUnlessImage') }}</span>
       </div>
       <textarea id="definition" v-model="definition" :required="!imageData" rows="4" :class="{
@@ -134,7 +131,7 @@
     <div>
       <label for="notes" class="block text-sm font-medium text-blue-700">
         {{ t('upsertDefinition.notesLabel') }} <span class="text-gray-500 font-normal">{{ t('upsertDefinition.optional')
-          }}</span>
+        }}</span>
       </label>
       <textarea id="notes" v-model="notes" rows="3" class="textarea-field" :disabled="isSubmitting" />
     </div>
@@ -261,8 +258,7 @@
 
     <!-- Messages -->
     <div v-if="success" class="text-green-600 text-xs sm:text-sm mt-2">
-      {{ isEditMode 
-          && t('upsertDefinition.updateSuccess') }}
+      <span v-if="isEditMode">{{ t('upsertDefinition.updateSuccess') }}</span>
       <span v-if="isExistingWord && !isEditMode">{{ t('upsertDefinition.existingWordNote') }}</span>
     </div>
   </form>
