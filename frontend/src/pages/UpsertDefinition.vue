@@ -100,6 +100,20 @@
       </div>
     </div>
 
+    <!-- Rafsi Input (Lojban only) -->
+    <div v-if="parseInt(sourceLangId) === 1">
+      <label for="rafsi" class="block text-sm font-medium text-blue-700">
+        {{ t('upsertDefinition.rafsiLabel', 'Rafsi') }} <span class="text-gray-500 font-normal">{{
+          t('upsertDefinition.optional') }}</span>
+      </label>
+      <input id="rafsi" v-model="rafsi" type="text"
+        :placeholder="t('upsertDefinition.rafsiPlaceholder', 'Space separated rafsi')" class="input-field w-full"
+        :disabled="isSubmitting" />
+      <p class="mt-1 text-xs text-gray-500">
+        {{ t('upsertDefinition.rafsiNote', 'Space separated list of rafsi.') }}
+      </p>
+    </div>
+
     <!-- Definition Input -->
     <div>
       <div class="flex items-center justify-between">
@@ -307,6 +321,7 @@ const wordId = ref('')
 const langId = ref('')
 const sourceLangId = ref(1)
 const definition = ref('')
+const rafsi = ref('')
 const notes = ref('')
 const etymology = ref('')
 const jargon = ref('')
@@ -353,6 +368,7 @@ const loadDefinitionData = async (definitionId) => {
       wordId.value = def.valsiid
       langId.value = def.langid
       definition.value = def.definition
+      rafsi.value = def.rafsi || ''
       notes.value = def.notes || ''
       etymology.value = def.etymology || ''
       jargon.value = def.jargon || ''
@@ -567,6 +583,7 @@ const submitValsi = async () => {
     const requestData = {
       word: word.value,
       definition: definition.value,
+      rafsi: rafsi.value || null,
       notes: notes.value || null,
       etymology: etymology.value || null,
       jargon: jargon.value || null,

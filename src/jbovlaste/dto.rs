@@ -79,6 +79,7 @@ pub struct AddDefinitionRequest {
     pub source_langid: Option<i32>,
     pub selmaho: Option<String>,
     pub jargon: Option<String>,
+    pub rafsi: Option<String>,
     pub gloss_keywords: Option<Vec<KeywordMapping>>,
     pub place_keywords: Option<Vec<KeywordMapping>>,
     pub owner_only: Option<bool>,
@@ -106,6 +107,7 @@ pub struct UpdateDefinitionRequest {
     pub place_keywords: Option<Vec<KeywordMapping>>,
     pub selmaho: Option<String>,
     pub jargon: Option<String>,
+    pub rafsi: Option<String>,
     pub owner_only: Option<bool>,
     #[schema(format = "binary")]
     pub image: Option<ImageData>,

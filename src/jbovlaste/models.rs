@@ -62,6 +62,7 @@ pub struct DefinitionDetail {
     #[schema(value_type = String, format = DateTime)]
     pub created_at: DateTime<Utc>,
     pub type_name: String,
+    pub rafsi: Option<String>,
     pub score: f32,
     pub comment_count: Option<i64>,
     pub gloss_keywords: Option<Vec<KeywordMapping>>,
@@ -103,6 +104,7 @@ impl From<tokio_postgres::Row> for DefinitionDetail {
             username: row.get("username"),
             time: row.get("time"),
             type_name: row.get("type_name"),
+            rafsi: row.try_get("rafsi").ok().flatten(), // Use try_get in case column is missing in some queries
             score: row.get("score"),
             user_vote: row.get("user_vote"),
             comment_count: row.get("comment_count"),

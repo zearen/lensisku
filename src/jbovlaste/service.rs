@@ -230,6 +230,7 @@ pub async fn semantic_search(
             has_image: row.get("has_image"),
             sound_url: None,
             metadata: None,
+            rafsi: None,
         });
     }
 
@@ -561,6 +562,7 @@ pub async fn search_definitions(
             sound_url: sound_urls.get(&word).cloned().flatten(), // Fixed type mismatch
             embedding: None,
             metadata: None,
+            rafsi: None,
         });
     }
 
@@ -828,6 +830,7 @@ pub async fn fast_search_definitions(
             sound_url: None, // Skipped for performance in fast search
             embedding: None,
             metadata: None,
+            rafsi: None,
         });
     }
 
@@ -1186,6 +1189,14 @@ async fn add_definition_in_transaction(
             .get::<_, i32>("valsiid"),
     };
 
+    validate_and_update_rafsi(
+        transaction,
+        valsi_id,
+        request.rafsi.clone(),
+        source_langid,
+    )
+    .await?;
+
     // Get next definition number
     let definitionnum = transaction
         .query_one(
@@ -1476,7 +1487,7 @@ pub async fn get_definition(
                 WHERE definition_id = $1
             ) as has_image
         )
-        SELECT d.*, v.word as valsiword, v.valsiid as valsiid, v.source_langid,
+        SELECT d.*, v.word as valsiword, v.valsiid as valsiid, v.source_langid, v.rafsi,
                 l.realname as langrealname, u.username,
                 vt.descriptor as type_name,
                 i.has_image,
@@ -1573,6 +1584,7 @@ pub async fn get_definition(
         username: row.get("username"),
         time: row.get("time"),
         type_name: row.get("type_name"),
+        rafsi: row.try_get("rafsi").ok().flatten(),
         comment_count: row.get("comment_count"),
         user_vote: row.get("user_vote"),
         gloss_keywords,
@@ -1654,7 +1666,7 @@ pub async fn update_definition(
     // Get current definition details including owner status and author
     let current_def = transaction
         .query_one(
-            "SELECT d.userid, d.owner_only, u.username, v.source_langid
+            "SELECT d.userid, d.owner_only, u.username, v.source_langid, d.valsiid
               FROM definitions d
               JOIN users u ON d.userid = u.userid
               JOIN valsi v ON d.valsiid = v.valsiid
@@ -1664,6 +1676,15 @@ pub async fn update_definition(
         .await?;
 
     let source_langid: Option<i32> = current_def.get("source_langid");
+    let valsi_id: i32 = current_def.get("valsiid");
+
+    validate_and_update_rafsi(
+        &transaction,
+        valsi_id,
+        request.rafsi.clone(),
+        source_langid.unwrap_or(1),
+    )
+    .await?;
 
     let options = MathJaxValidationOptions { use_tectonic: true };
 
@@ -2133,6 +2154,7 @@ pub async fn list_definitions(
             created_at: row.get("created_at"),
             has_image: row.get("has_image"),
             metadata: None,
+            rafsi: None,
         })
         .collect();
 
@@ -2298,6 +2320,7 @@ pub async fn list_non_lojban_definitions(
             created_at: row.get("created_at"),
             has_image: row.get("has_image"),
             metadata: None,
+            rafsi: None,
         })
         .collect();
 
@@ -2529,6 +2552,7 @@ pub async fn get_definitions_by_entry(
             has_image: row.get("has_image"),
             sound_url: None,
             metadata: None,
+            rafsi: None,
         })
         .collect();
 
@@ -3081,6 +3105,7 @@ pub async fn bulk_import_definitions(
                 "client_id": params.client_id,
                 "import_time": params.import_time,
             })),
+            rafsi: None,
         };
 
         // Pass the parser map to add_definition
@@ -3636,6 +3661,7 @@ pub async fn list_definitions_by_client_id(
             embedding: None,
             similarity: None,
             metadata: row.get("metadata"),
+            rafsi: None,
         });
     }
 
@@ -3657,4 +3683,71 @@ pub async fn list_definitions_by_client_id(
         per_page,
         decomposition: Vec::new(),
     })
+}
+
+async fn validate_and_update_rafsi(
+    transaction: &Transaction<'_>,
+    valsi_id: i32,
+    rafsi_opt: Option<String>,
+    source_langid: i32,
+) -> Result<(), Box<dyn std::error::Error>> {
+    if let Some(rafsi_str) = rafsi_opt {
+        // Only process for Lojban
+        if source_langid == 1 {
+            let rafsi_str = rafsi_str.trim();
+            if rafsi_str.is_empty() {
+                // Clear rafsi
+                transaction
+                    .execute(
+                        "UPDATE valsi SET rafsi = NULL WHERE valsiid = $1",
+                        &[&valsi_id],
+                    )
+                    .await?;
+            } else {
+                let rafsi_list: Vec<&str> = rafsi_str.split_whitespace().collect();
+                
+                // Check conflicts
+                // Types: 1=gismu, 2=cmavo, 4=lujvo, 5=fu'ivla
+                let protected_types: Vec<i16> = vec![1, 2, 4, 5];
+                
+                let conflict_query = "
+                    SELECT v.word, vt.descriptor
+                    FROM valsi v
+                    JOIN valsitypes vt ON v.typeid = vt.typeid
+                    WHERE v.valsiid != $1
+                    AND v.source_langid = 1
+                    AND v.typeid = ANY($2)
+                    AND EXISTS (
+                        SELECT 1
+                        FROM unnest(string_to_array(v.rafsi, ' ')) existing_rafsi
+                        WHERE existing_rafsi = ANY($3)
+                    )
+                    LIMIT 1
+                ";
+                
+                let rows = transaction
+                    .query(conflict_query, &[&valsi_id, &protected_types, &rafsi_list])
+                    .await?;
+                
+                if let Some(row) = rows.first() {
+                    let word: String = row.get("word");
+                    let type_name: String = row.get("descriptor");
+                    return Err(format!(
+                        "RAFSI_CONFLICT|{}|{}",
+                        word, type_name
+                    )
+                    .into());
+                }
+
+                // Update valsi
+                transaction
+                    .execute(
+                        "UPDATE valsi SET rafsi = $1 WHERE valsiid = $2",
+                        &[&rafsi_str, &valsi_id],
+                    )
+                    .await?;
+            }
+        }
+    }
+    Ok(())
 }

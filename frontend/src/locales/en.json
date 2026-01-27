@@ -528,7 +528,13 @@
     "analyzeErrorGeneric": "Error analyzing text",
     "validateError": "Invalid LaTeX/MathJax syntax",
     "saveError": "Failed to save definition",
-    "saveErrorGeneric": "Error saving definition"
+    "saveErrorGeneric": "Error saving definition",
+    "rafsiLabel": "Rafsi",
+    "rafsiPlaceholder": "Space separated rafsi",
+    "rafsiNote": "Space separated list of rafsi.",
+    "sourceLanguageLabel": "Entry Language",
+    "sourceLanguageNote": "The language the word itself belongs to. Cannot be changed after creation.",
+    "rafsiConflict": "Rafsi already used by non-experimental word '{word}' ({type})"
   },
   "flashcardStudy": {
     "title": "Study Session",
