@@ -69,8 +69,10 @@ import { useRoute } from 'vue-router'
 import { confirmEmail, resendConfirmation } from '@/api'
 import LoadingSpinner from '@/components/LoadingSpinner.vue'
 import { useSeoHead } from '@/composables/useSeoHead'
+import { useAuth } from '@/composables/useAuth'
 
 const { t, locale } = useI18n()
+const auth = useAuth()
 
 // State
 const isLoading = ref(true)
@@ -99,6 +101,17 @@ const confirmEmailToken = async (token) => {
     // Check for success field, or if response has message and no error, treat as success
     if (response.data.success === true || (response.data.message && !response.data.error)) {
       success.value = true
+      
+      // If user is logged in, refresh their token to get updated email_confirmed status and role
+      if (auth.state.isLoggedIn && auth.refreshAccessToken) {
+        try {
+          await auth.refreshAccessToken()
+        } catch (refreshError) {
+          // If refresh fails, it's not critical - the user can still see the success message
+          // The token will be refreshed on next request or when they navigate
+          console.warn('Failed to refresh token after email confirmation:', refreshError)
+        }
+      }
     } else {
       error.value = response.data.error || 'Failed to confirm email'
       isExpired.value = response.data.error?.includes('expired')

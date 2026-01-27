@@ -26,8 +26,8 @@
         class="text-blue-600 hover:text-blue-800 underline font-medium disabled:opacity-50 disabled:cursor-not-allowed">
         {{ isResendingConfirmation ? $t('emailConfirmation.sending') : $t('unconfirmedWarningLink') }}
       </button>
-      <span v-if="resendConfirmationSuccess" class="text-green-600 text-xs">
-        {{ $t('emailConfirmation.requestSuccess') }}
+      <span v-if="resendConfirmationSuccess" class="text-green-600 text-xs ml-2">
+        {{ $t('unconfirmedWarningMessageSent') }}
       </span>
     </div>
   </div>

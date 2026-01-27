@@ -127,6 +127,7 @@
   "discord": "Discord",
   "unconfirmedWarning": "Your email address has not been confirmed. Please check your email and click the confirmation link to activate your account.",
   "unconfirmedWarningLink": "Resend confirmation email",
+  "unconfirmedWarningMessageSent": "Confirmation email sent! Please check your inbox.",
   "toggleMenu": "Toggle menu",
   "logoText": "Lens",
   "activityThreads": {

@@ -25,6 +25,7 @@ pub fn configure(cfg: &mut web::ServiceConfig) {
             .service(controller::restore_password)
             .service(controller::request_password_reset)
             .service(controller::confirm_email)
+            .service(controller::resend_confirmation)
             .service(controller::google_oauth_signup)
             // Protected routes (require auth)
             .service(
