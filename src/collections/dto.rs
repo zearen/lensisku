@@ -102,8 +102,8 @@ pub struct AddItemRequest {
     pub license: Option<String>,
     pub script: Option<String>,
     pub is_original: Option<bool>,
-    #[serde(rename = "auto_progress")]
-    pub auto_progress: bool,
+    #[serde(default, rename = "auto_progress")]
+    pub auto_progress: Option<bool>,
     #[schema(format = "binary")]
     pub front_image: Option<ImageData>,
     #[schema(format = "binary")]

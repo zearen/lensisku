@@ -810,7 +810,7 @@ pub async fn upsert_item(
                     &req.is_original.unwrap_or(true),
                     &sanitized_notes,
                     &position,
-                    &req.auto_progress,
+                    &req.auto_progress.unwrap_or(true),
                 ],
             )
             .await
@@ -1123,7 +1123,7 @@ pub async fn upsert_item(
             is_original: req.is_original.unwrap_or(false),
             ci_notes: notes,
             position,
-            auto_progress: req.auto_progress,
+            auto_progress: req.auto_progress.unwrap_or(true),
             added_at,
             has_front_image: req.front_image.is_some(),
             has_back_image: req.back_image.is_some(),
@@ -1149,7 +1149,7 @@ pub async fn upsert_item(
             is_original: req.is_original.unwrap_or(true),
             ci_notes: notes,
             position,
-            auto_progress: req.auto_progress,
+            auto_progress: req.auto_progress.unwrap_or(true),
             added_at,
             has_front_image: req.front_image.is_some(),
             has_back_image: req.back_image.is_some(),
