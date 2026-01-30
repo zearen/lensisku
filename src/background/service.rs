@@ -18,6 +18,19 @@ use tokio::{
     time::{self, sleep},
 };
 
+/// Types where definition notes are known to skew embeddings (e.g. boilerplate "experimental" text).
+/// When we have no glosswords, we use only definition and exclude notes for these types.
+fn skip_notes_for_embedding_type(type_name: &str) -> bool {
+    matches!(
+        type_name.to_lowercase().as_str(),
+        "experimental cmavo"
+            | "experimental gismu"
+            | "obsolete cmavo"
+            | "obsolete gismu"
+            | "obsolete zei-lujvo"
+    )
+}
+
 async fn calculate_missing_embeddings(
     pool: &Pool,
     client: &Client,
@@ -88,9 +101,15 @@ async fn calculate_missing_embeddings(
         if !glosswords.trim().is_empty() {
             text_parts.push(glosswords);
         } else {
-            // Fallback to definition + notes if no gloss is available
+            // Fallback to definition (+ notes only when notes are not known to skew embeddings)
+            let def_len = definition.len().max(1);
             text_parts.push(definition);
-            text_parts.push(notes);
+            let add_notes = !skip_notes_for_embedding_type(&type_name)
+                && !notes.trim().is_empty()
+                && !(type_name.eq_ignore_ascii_case("fu'ivla") && notes.len() > 2 * def_len);
+            if add_notes {
+                text_parts.push(notes);
+            }
         }
 
         // Always include placewords as they capture key semantic roles

@@ -14,17 +14,17 @@ struct RegexSet {
     see_also: Regex,
     cmavo_list: Regex,
     see: Regex,
+    /// Structural boilerplate: "is the language with ISO 639-3 code " -> " language " so the actual language name dominates
+    lang_iso_prefix: Regex,
+    country_prefix: Regex,
+    currency_prefix: Regex,
+    quantity_prefix: Regex,
     multi_space: Regex,
     multi_dots: Regex,
     trailing_punct: Regex,
     multi_comma: Regex,
     leading_punct: Regex,
-    unk_dot_unk: Regex,
-    dot_unk_dot: Regex,
-    unk_comma_unk: Regex,
     trailing_dot: Regex,
-    trailing_unk: Regex,
-    modal_unk: Regex,
     ka_nu_duu: Regex,
 }
 
@@ -37,17 +37,16 @@ impl RegexSet {
             see_also: Regex::new(r"See also *:?\b *")?,
             cmavo_list: Regex::new(r"\bcmavo list\b")?,
             see: Regex::new(r"See\b *")?,
+            lang_iso_prefix: Regex::new(r"(?i)\s*is\s+the\s+language\s+with\s+ISO\s*(?:639-3\s+)?code\s*")?,
+            country_prefix: Regex::new(r"(?i)\s*is\s+the\s+country\s+with\s+the\s*")?,
+            currency_prefix: Regex::new(r"(?i)\s*is\s+measured\s+in\s+currency\s*")?,
+            quantity_prefix: Regex::new(r"(?i)\s*is\s+a\s+quantity\s+of\s*/\s*contain\s*")?,
             multi_space: Regex::new(r" {2,}")?,
             multi_dots: Regex::new(r"[\.,] ?[\.,]")?,
             trailing_punct: Regex::new(r"[,\. ]+$")?,
             multi_comma: Regex::new(r"(, *,)+")?,
             leading_punct: Regex::new(r"^[,\. ]+")?,
-            unk_dot_unk: Regex::new(r"\[UNK\]\. *\[UNK\]")?,
-            dot_unk_dot: Regex::new(r"\. *\[UNK\]\.")?,
-            unk_comma_unk: Regex::new(r"\[UNK\] *, *\[UNK\]")?,
             trailing_dot: Regex::new(r" *\.$")?,
-            trailing_unk: Regex::new(r" *\[UNK\]$")?,
-            modal_unk: Regex::new(r"\[UNK\] modal, ")?,
             ka_nu_duu: Regex::new(r"\((ka|nu|du'u)\)")?,
         })
     }
@@ -55,79 +54,53 @@ impl RegexSet {
 
 static REGEX_SET: Lazy<Result<RegexSet, RegexError>> = Lazy::new(RegexSet::new);
 
-/// Preprocesses a definition string for embedding generation
+/// Preprocesses a definition string for embedding generation.
 ///
-/// Handles special formatting, removes certain patterns, and normalizes whitespace
+/// Removes/normalizes formatting and structural boilerplate so embeddings capture meaning
+/// rather than shared placeholders. Uses space (not [UNK]) for removed content to avoid
+/// clustering many definitions around the same token.
 pub fn preprocess_definition_for_vectors(def: &str) -> Result<String, RegexError> {
     let regex_set = REGEX_SET.as_ref().map_err(|e| e.clone())?;
     let mut processed = def.trim().to_string();
 
-    // Replace special patterns with [UNK]
+    // Replace special patterns with space (empty string would glue words; [UNK] would cluster)
     processed = processed.replace('/', " / ");
-    processed = regex_set.math.replace_all(&processed, "[UNK]").into_owned();
-    processed = regex_set
-        .braces
-        .replace_all(&processed, "[UNK]")
-        .into_owned();
-    processed = regex_set
-        .quotes
-        .replace_all(&processed, "[UNK]")
-        .into_owned();
+    processed = regex_set.math.replace_all(&processed, " ").into_owned();
+    processed = regex_set.braces.replace_all(&processed, " ").into_owned();
+    processed = regex_set.quotes.replace_all(&processed, " ").into_owned();
 
-    // Remove specific patterns
+    // Remove service phrases
     processed = regex_set.see_also.replace_all(&processed, "").into_owned();
-    processed = regex_set
-        .cmavo_list
-        .replace_all(&processed, "")
-        .into_owned();
+    processed = regex_set.cmavo_list.replace_all(&processed, "").into_owned();
     processed = regex_set.see.replace_all(&processed, "").into_owned();
 
+    // Normalize structural boilerplate so the distinguishing part dominates (report §8.4)
+    processed = regex_set
+        .lang_iso_prefix
+        .replace_all(&processed, " language ")
+        .into_owned();
+    processed = regex_set
+        .country_prefix
+        .replace_all(&processed, " country ")
+        .into_owned();
+    processed = regex_set
+        .currency_prefix
+        .replace_all(&processed, " currency ")
+        .into_owned();
+    processed = regex_set
+        .quantity_prefix
+        .replace_all(&processed, " quantity ")
+        .into_owned();
+
     // Normalize whitespace and punctuation
-    processed = regex_set
-        .multi_space
-        .replace_all(&processed, " ")
-        .into_owned();
-    processed = regex_set
-        .multi_dots
-        .replace_all(&processed, ".")
-        .into_owned();
-    processed = regex_set
-        .trailing_punct
-        .replace_all(&processed, "")
-        .into_owned();
-    processed = regex_set
-        .multi_comma
-        .replace_all(&processed, ",")
-        .into_owned();
-    processed = regex_set
-        .leading_punct
-        .replace_all(&processed, "")
-        .into_owned();
+    processed = regex_set.multi_space.replace_all(&processed, " ").into_owned();
+    processed = regex_set.multi_dots.replace_all(&processed, ".").into_owned();
+    processed = regex_set.trailing_punct.replace_all(&processed, "").into_owned();
+    processed = regex_set.multi_comma.replace_all(&processed, ",").into_owned();
+    processed = regex_set.leading_punct.replace_all(&processed, "").into_owned();
+    processed = regex_set.trailing_dot.replace_all(&processed, "").into_owned();
 
-    // Handle [UNK] patterns
-    processed = regex_set
-        .unk_dot_unk
-        .replace_all(&processed, ". [UNK] ")
-        .into_owned();
-    processed = regex_set
-        .dot_unk_dot
-        .replace_all(&processed, ".")
-        .into_owned();
-    processed = regex_set
-        .unk_comma_unk
-        .replace_all(&processed, "[UNK]")
-        .into_owned();
-    processed = regex_set
-        .trailing_dot
-        .replace_all(&processed, "")
-        .into_owned();
-    processed = regex_set
-        .trailing_unk
-        .replace_all(&processed, "")
-        .into_owned();
-    processed = regex_set.modal_unk.replace_all(&processed, "").into_owned();
-
-    // Remove specific Lojban patterns
+    // Remove Lojban placeholder patterns
     processed = regex_set.ka_nu_duu.replace_all(&processed, "").into_owned();
 
     Ok(processed.trim().to_string())
@@ -140,9 +113,17 @@ mod tests {
     #[test]
     fn test_preprocessing() -> Result<(), RegexError> {
         let input = r#"See also {broda}, $x_1$ is a "thing" / cmavo list, See foo.. bar,,  [UNK]. [UNK]. (ka)"#;
-        let expected = "[UNK] is a [UNK] / , foo. bar. . [UNK] .";
+        // Math/braces/quotes replaced with space; See also/cmavo list/See removed; (ka) removed; no [UNK] produced
         let actual = preprocess_definition_for_vectors(input)?;
-        assert_eq!(actual, expected);
+        assert!(actual.contains("is a") && actual.contains("foo. bar") && !actual.contains("See also") && !actual.contains("(ka)"));
+        Ok(())
+    }
+
+    #[test]
+    fn test_lang_iso_prefix() -> Result<(), RegexError> {
+        let input = "$x_1$ is the language with ISO 639-3 code en.";
+        let actual = preprocess_definition_for_vectors(input)?;
+        assert!(actual.contains("language") && actual.contains("en"), "actual: {:?}", actual);
         Ok(())
     }
 }

@@ -36,6 +36,15 @@ pub fn sanitize_html(html: &str) -> String {
     remove_html_tags(html)
 }
 
+/// Similarity threshold for semantic search (cosine distance). Lower = stricter.
+/// Set via env SEMANTIC_SIMILARITY_THRESHOLD (default 0.4).
+fn semantic_similarity_threshold() -> f64 {
+    std::env::var("SEMANTIC_SIMILARITY_THRESHOLD")
+        .ok()
+        .and_then(|s| s.parse().ok())
+        .unwrap_or(0.4)
+}
+
 pub async fn semantic_search(
     pool: &Pool,
     params: SearchDefinitionsParams,
@@ -44,6 +53,7 @@ pub async fn semantic_search(
     let mut client = pool.get().await?;
     let transaction = client.transaction().await?;
 
+    let similarity_threshold = semantic_similarity_threshold();
     let offset = (params.page - 1) * params.per_page;
 
     // Convert Option<Vec<i32>> to Option<&[i32]> for Postgres
@@ -117,7 +127,8 @@ pub async fn semantic_search(
         )
         SELECT COUNT(*)
         FROM vector_search
-        WHERE score > 0 AND similarity < 0.4"#
+        WHERE score > 0 AND similarity < {}"#,
+        similarity_threshold
     );
 
     // Execute count query with all necessary parameters accumulated so far
@@ -132,6 +143,8 @@ pub async fn semantic_search(
     query_params.push(&params.per_page);
     let offset_param_index = query_params.len() + 1;
     query_params.push(&offset);
+
+    let limit_offset_sql = format!("LIMIT ${} OFFSET ${}", limit_param_index, offset_param_index);
 
     let query_string = format!(
         r#"
@@ -180,19 +193,18 @@ pub async fn semantic_search(
         ranked_results AS (
             SELECT DISTINCT ON (definitionid) *
             FROM vector_search
-            WHERE score > 0 AND similarity < 0.4
+            WHERE score > 0 AND similarity < {similarity_threshold}
         )
         SELECT r.*
         FROM ranked_results r
         ORDER BY r.similarity ASC
-        LIMIT ${limit_param_index} OFFSET ${offset_param_index}"#
+        {limit_offset_sql}"#
     );
 
     let mut definitions: Vec<DefinitionDetail> = Vec::new();
     // Execute main query with the final parameter list (including limit/offset)
     let rows = transaction.query(&query_string, &query_params).await?;
 
-    println!("{}", rows.len());
     // Process each definition
     for row in rows {
         let def_id: i32 = row.get("definitionid");
