@@ -120,6 +120,10 @@
     "makePublicLabel": "javni lo liste",
     "saveChanges": "vreji lo nu galfi"
   },
+  "collectionWidget": {
+    "select": "cuxna",
+    "selected": "se cuxna"
+  },
   "roles": {
     "admin": "admine",
     "moderator": "jitro",

@@ -404,6 +404,8 @@
   },
   "collectionWidget": {
     "itemsCount": "{count} items",
+    "select": "Select",
+    "selected": "Selected",
     "createNew": "Create New Collection",
     "createFirst": "Create Your First Collection",
     "addToCollection": "Add to collection",

@@ -402,6 +402,8 @@
   },
   "collectionWidget": {
     "itemsCount": "{count} элементов",
+    "select": "Выбрать",
+    "selected": "Выбрано",
     "createNew": "Создать новую коллекцию",
     "createFirst": "Создайте свою первую коллекцию",
     "addToCollection": "Добавить в коллекцию",
