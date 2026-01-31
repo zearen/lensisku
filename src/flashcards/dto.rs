@@ -14,6 +14,12 @@ pub struct CreateFlashcardRequest {
     pub direction: FlashcardDirection,
     #[serde(default)]
     pub correct_answer_text: Option<String>,
+    #[serde(default = "default_use_canonical_comparison")]
+    pub use_canonical_comparison: bool,
+}
+
+fn default_use_canonical_comparison() -> bool {
+    true
 }
 
 impl CreateFlashcardRequest {
@@ -126,6 +132,8 @@ pub struct Flashcard {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub sound_url: Option<String>,
     pub canonical_form: Option<String>,
+    #[serde(default = "default_use_canonical_comparison")]
+    pub use_canonical_comparison: bool,
     #[schema(value_type = String, format = DateTime)]
     pub created_at: DateTime<Utc>,
     // Fields for Quiz type

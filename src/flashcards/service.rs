@@ -63,6 +63,7 @@ async fn get_flashcard(
         definition_language_id: row.get("definition_language_id"),
         sound_url: None,
         canonical_form: row.get("canonical_form"),
+        use_canonical_comparison: row.get("use_canonical_comparison"),
         created_at: row.get("created_at"),
         question_text: None, // Will be populated later if it's a quiz
         quiz_options: None,  // Will be populated later if it's a quiz
@@ -205,6 +206,7 @@ pub async fn create_flashcard(
             quiz_options: None,
             sound_url: None,
             canonical_form: row.get("canonical_form"),
+            use_canonical_comparison: row.get("use_canonical_comparison"),
         };
 
         let progress = get_all_progress(&transaction, user_id, flashcard.id).await?;
@@ -229,15 +231,16 @@ pub async fn create_flashcard(
         .query_one(
             "INSERT INTO flashcards (
                 collection_id,
-                item_id, position, direction
+                item_id, position, direction, use_canonical_comparison
             )
-            VALUES ($1, $2, $3, $4)
+            VALUES ($1, $2, $3, $4, $5)
             RETURNING id, created_at",
             &[
                 &collection_id,
                 &item_id,
                 &(max_position + 1),
                 &req.direction,
+                &req.use_canonical_comparison,
             ],
         )
         .await?;
@@ -810,6 +813,7 @@ pub async fn list_flashcards(
                         item_id: row.get("item_id"),
                         sound_url: sound_url.clone(),
                         canonical_form: row.get("canonical_form"),
+                        use_canonical_comparison: row.get("use_canonical_comparison"),
                         question_text: question_text.clone(), // Use cloned quiz data
                         quiz_options: quiz_options.clone(),
                     },
@@ -871,6 +875,7 @@ pub async fn list_flashcards(
                     question_text,
                     quiz_options,
                     canonical_form: row.get("canonical_form"),
+                    use_canonical_comparison: row.get("use_canonical_comparison"),
                 },
                 progress: vec![progress],
             };
@@ -1813,6 +1818,15 @@ pub async fn check_answer(
         return Err("Cannot answer 'Just Information' cards.".into());
     }
 
+    // Get use_canonical_comparison flag
+    let use_canonical: bool = transaction
+        .query_one(
+            "SELECT use_canonical_comparison FROM flashcards WHERE id = $1",
+            &[&req.flashcard_id],
+        )
+        .await?
+        .get(0);
+
     let flashcard = get_flashcard(&transaction, req.flashcard_id).await?;
 
     let (expected, provided, is_free_content) = match req.card_side.as_str() {
@@ -1859,7 +1873,22 @@ pub async fn check_answer(
         }
     };
 
-    let is_correct = expected == provided;
+    // Check if answer is correct, using canonical comparison if enabled
+    let is_correct = if use_canonical && is_free_content {
+        // Try canonical comparison for free content (Lojban phrases)
+        if let (Some(expected_canon), Some(provided_canon)) = (
+            crate::tersmu::get_canonical_form(&expected),
+            crate::tersmu::get_canonical_form(&provided),
+        ) {
+            expected_canon == provided_canon
+        } else {
+            // Fall back to string comparison if canonicalization fails
+            expected == provided
+        }
+    } else {
+        // Use standard string comparison
+        expected == provided
+    };
 
     if is_correct {
         let review_req = ReviewRequest {

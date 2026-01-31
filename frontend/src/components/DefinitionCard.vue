@@ -199,7 +199,7 @@
       <div v-if="(flashcard && flashcard.canonical_form) || (definition && definition.canonical_form)"
         class="mt-3 pt-3 border-t flex flex-col gap-1.5">
         <div class="flex items-center gap-2 text-xs font-semibold text-gray-400 uppercase tracking-wider">
-          <SquareEqual class="h-3.5 w-3.5 text-blue-400" />
+          <EqualApproximately class="h-3.5 w-3.5 text-blue-400" />
           <span>{{ t('components.definitionCard.canonicalLabel') }}</span>
         </div>
         <div
@@ -276,7 +276,7 @@ import {
   MessageSquareMore,
   MinusCircle,
   GalleryHorizontalIcon,
-  SquareEqual,
+  EqualApproximately,
 } from 'lucide-vue-next'
 import { computed, ref, watch } from 'vue';
 import { RouterLink, useRouter } from 'vue-router';

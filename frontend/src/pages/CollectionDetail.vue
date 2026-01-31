@@ -308,6 +308,17 @@
           <p class="text-xs text-gray-500">
             {{ t('collectionDetail.autoProgressDescription') }}
           </p>
+
+          <!-- Canonical Comparison Checkbox for Fill-in Mode -->
+          <div v-if="addItemDirection.toLowerCase().includes('fillin')" class="flex items-center space-x-2 mt-3">
+            <input id="use_canonical_comparison" v-model="useCanonicalComparison" type="checkbox" class="checkbox-toggle">
+            <label for="use_canonical_comparison" class="text-sm text-gray-700">
+              {{ t('collectionDetail.useCanonicalComparisonLabel', 'Use canonical Lojban comparison') }}
+            </label>
+          </div>
+          <p v-if="addItemDirection.toLowerCase().includes('fillin')" class="text-xs text-gray-500">
+            {{ t('collectionDetail.useCanonicalComparisonDescription', 'When enabled, answers will be compared using their canonical Lojban form, allowing for equivalent but differently written answers.') }}
+          </p>
         </div>
 
       </div>
@@ -853,6 +864,7 @@ const customContent = ref({
 
 const definitionBackImage = ref(null)
 const addItemDirection = ref('direct')
+const useCanonicalComparison = ref(true)
 const enableFlashcard = ref(false)
 const customContentContainer = ref(null)
 const searchContentContainer = ref(null)
@@ -1094,6 +1106,7 @@ const addCustomContent = async () => {
       back_image: customContent.value.backImage,
       auto_progress: itemType.value === 'quiz' ? true : customContent.value.auto_progress, // Quizzes are always auto-progress for now
       direction: direction,
+      use_canonical_comparison: useCanonicalComparison.value,
     })
 
     showAddModal.value = false

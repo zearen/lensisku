@@ -67,6 +67,13 @@
               getLanguageName(currentCard.flashcard.definition_language_id) }) }}
         </div>
 
+        <!-- Canonical Comparison Indicator for Fill-in Mode -->
+        <div v-if="isFillInMode && currentCard.flashcard.use_canonical_comparison" 
+          class="flex items-center justify-center gap-2 text-xs text-green-600 bg-green-50 border border-green-200 rounded px-3 py-1.5">
+          <CheckCircle2 class="h-3.5 w-3.5" />
+          <span>{{ t('flashcardStudy.canonicalComparisonEnabled', 'Canonical comparison enabled') }}</span>
+        </div>
+
         <!-- Question -->
         <!-- Display Word/Front for 'direct' side -->
         <div v-if="currentCard.progress[0].card_side === 'direct'">
@@ -221,7 +228,7 @@
 </template>
 
 <script setup>
-import { XCircle, Check, Smile } from 'lucide-vue-next'
+import { XCircle, Check, Smile, CheckCircle2 } from 'lucide-vue-next'
 import { ref, onMounted, computed, watch, nextTick, onBeforeUnmount } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRoute, useRouter } from 'vue-router'
