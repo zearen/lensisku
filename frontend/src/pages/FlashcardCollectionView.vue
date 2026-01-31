@@ -119,6 +119,9 @@
           <h3 class="text-lg font-medium text-gray-800">
             {{ card.flashcard.word ?? card.flashcard.free_content_front }}
           </h3>
+          <div v-if="card.flashcard.canonical_form" class="text-sm text-gray-500 font-mono mt-1">
+             {{ card.flashcard.canonical_form }}
+          </div>
           <div class="text-sm text-gray-600 mt-1">
             <LazyMathJax :content="card.flashcard.definition ?? card.flashcard.free_content_back" />
           </div>

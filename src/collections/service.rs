@@ -425,16 +425,19 @@ pub async fn import_json(
                 .await.map_err(|e| AppError::Database(e.to_string()))?
                 .try_get(0).map_err(|e| AppError::Database(e.to_string()))?;
 
+            let canonical_form = crate::tersmu::get_canonical_form(&item.word);
+
             // Add item
             transaction
                 .execute(
-                    "INSERT INTO collection_items (collection_id, definition_id, notes, position)
-                     VALUES ($1, $2, $3, $4)",
+                    "INSERT INTO collection_items (collection_id, definition_id, notes, position, canonical_form)
+                     VALUES ($1, $2, $3, $4, $5)",
                     &[
                         &collection_id,
                         &def_id,
                         &item.collection_note,
                         &(max_position + 1),
+                        &canonical_form,
                     ],
                 )
                 .await
@@ -593,10 +596,14 @@ pub async fn import_collection_from_json(
         let sanitized_back = item.free_content_back.as_ref().map(|b| sanitize_html(b));
         let sanitized_note = item.collection_note.as_ref().map(|n| sanitize_html(n));
 
+        let canonical_form = sanitized_front.as_ref()
+            .and_then(|front| crate::tersmu::get_canonical_form(front))
+            .or_else(|| item.word.as_ref().and_then(|w| crate::tersmu::get_canonical_form(w)));
+
         let new_item_id: i32 = transaction
             .query_one(
-                "INSERT INTO collection_items (collection_id, definition_id, free_content_front, free_content_back, notes, position)
-                 VALUES ($1, $2, $3, $4, $5, $6) RETURNING item_id",
+                "INSERT INTO collection_items (collection_id, definition_id, free_content_front, free_content_back, notes, position, canonical_form)
+                 VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING item_id",
                 &[
                     &target_collection_id,
                     &item.definition_id,
@@ -604,6 +611,7 @@ pub async fn import_collection_from_json(
                     &sanitized_back,
                     &sanitized_note,
                     &current_max_position,
+                    &canonical_form,
                 ],
             )
             .await.map_err(|e| AppError::Database(e.to_string()))?
@@ -740,7 +748,24 @@ pub async fn upsert_item(
     }
 
     // Create or update item
+    let mut canonical_form = sanitized_front.as_ref()
+        .and_then(|front| crate::tersmu::get_canonical_form(front));
+
+    // For dictionary items without free content, try to use the word from the definition
+    if canonical_form.is_none() {
+        if let Some(def_id) = req.definition_id {
+            if let Ok(row) = transaction.query_one(
+                "SELECT v.word FROM definitions d JOIN valsi v ON d.valsiid = v.valsiid WHERE d.definitionid = $1",
+                &[&def_id]
+            ).await {
+                let word: String = row.get(0);
+                canonical_form = crate::tersmu::get_canonical_form(&word);
+            }
+        }
+    }
+
     let (item_id, notes, added_at): (i32, Option<String>, DateTime<Utc>) = if let Some(row) = existing_item {
+        let item_id: i32 = row.get("item_id");
         // Update existing item
         let old_position: i32 = row.get("position");
 
@@ -764,7 +789,7 @@ pub async fn upsert_item(
                         &collection_id,
                         &start,
                         &end,
-                        &row.get::<_, i32>("item_id"),
+                        &item_id,
                     ],
                 )
                 .await
@@ -774,15 +799,16 @@ pub async fn upsert_item(
         transaction
             .execute(
                 "UPDATE collection_items 
-                 SET notes = $1, position = $2 
-                 WHERE item_id = $3",
-                &[&sanitized_notes, &position, &row.get::<_, i32>("item_id")],
+                 SET notes = $1, position = $2, canonical_form = $3,
+                     free_content_front = $4, free_content_back = $5
+                 WHERE item_id = $6",
+                &[&sanitized_notes, &position, &canonical_form, &sanitized_front, &sanitized_back, &item_id],
             )
             .await
             .map_err(|e| AppError::Database(e.to_string()))?;
 
         (
-            row.get::<_, i32>("item_id"),
+            item_id,
             sanitized_notes,
             row.get::<_, DateTime<Utc>>("added_at"),
         )
@@ -794,9 +820,9 @@ pub async fn upsert_item(
                     collection_id, definition_id, 
                     free_content_front, free_content_back, 
                     langid, owner_user_id, license, script, is_original,
-                    notes, position, auto_progress
+                    notes, position, auto_progress, canonical_form
                 )
-                VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+                VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
                 RETURNING item_id, added_at",
                 &[
                     &collection_id,
@@ -811,6 +837,7 @@ pub async fn upsert_item(
                     &sanitized_notes,
                     &position,
                     &req.auto_progress.unwrap_or(true),
+                    &canonical_form,
                 ],
             )
             .await
@@ -1127,6 +1154,7 @@ pub async fn upsert_item(
             added_at,
             has_front_image: req.front_image.is_some(),
             has_back_image: req.back_image.is_some(),
+            canonical_form: canonical_form,
             flashcard: None,
         }
     } else {
@@ -1153,6 +1181,7 @@ pub async fn upsert_item(
             added_at,
             has_front_image: req.front_image.is_some(),
             has_back_image: req.back_image.is_some(),
+            canonical_form: canonical_form,
             flashcard: None,
         }
     };
@@ -1433,11 +1462,11 @@ pub async fn clone_collection(
             "INSERT INTO collection_items (collection_id, definition_id, 
                 free_content_front, free_content_back, 
                 langid, owner_user_id, license, script, is_original, 
-                notes, position, auto_progress)
+                notes, position, auto_progress, canonical_form)
             SELECT $1, definition_id, 
                    free_content_front, free_content_back, 
                    langid, owner_user_id, license, script, is_original, 
-                   notes, position, auto_progress
+                   notes, position, auto_progress, canonical_form
             FROM collection_items 
             WHERE collection_id = $2
             AND (definition_id IS NOT NULL 
@@ -1535,8 +1564,8 @@ pub async fn merge_collections(
     // Merge items handling duplicates
     transaction
         .execute(
-            "INSERT INTO collection_items (collection_id, definition_id, notes)
-            SELECT $1, definition_id, notes 
+            "INSERT INTO collection_items (collection_id, definition_id, notes, canonical_form)
+            SELECT $1, definition_id, notes, canonical_form 
             FROM collection_items 
             WHERE collection_id = $2
             ON CONFLICT (collection_id, definition_id) DO NOTHING",
@@ -1629,6 +1658,7 @@ pub async fn list_collection_items(
     let mut query = String::from(
         "SELECT ci.item_id, ci.definition_id, ci.notes as ci_notes, ci.added_at, ci.auto_progress, 
                 ci.free_content_front, ci.free_content_back, 
+                ci.canonical_form,
                 ci.langid, ci.owner_user_id, ci.license, ci.script, ci.is_original,
                 d.langid as lang_id,
                 coalesce(u.username,'') as username,
@@ -1718,11 +1748,13 @@ pub async fn list_collection_items(
             script: row.get("script"),
             is_original: row.get("is_original"),
             has_back_image: exists_back_image(row),
+            canonical_form: row.get("canonical_form"),
             flashcard: if let Some(flashcard_id) = row.get::<_, Option<i32>>("flashcard_id") {
                 Some(FlashcardResponse {
                     id: flashcard_id,
                     direction: row.get("flashcard_direction"),
                     created_at: row.get("flashcard_created_at"),
+                    canonical_form: row.get("canonical_form"),
                 })
             } else {
                 None
@@ -1885,6 +1917,7 @@ pub async fn update_item_notes(
         script: item.get("script"),
         is_original: item.get("is_original"),
         has_back_image: item.get("has_back_image"),
+        canonical_form: item.get("canonical_form"),
         flashcard: None,
     })
 }
@@ -2066,7 +2099,7 @@ pub async fn search_items(
         SELECT ci.item_id, ci.definition_id, ci.notes as ci_notes, 
                ci.added_at, ci.position, ci.auto_progress, 
                ci.langid, ci.owner_user_id, ci.license, ci.script, ci.is_original,
-               ci.free_content_front, ci.free_content_back,
+               ci.free_content_front, ci.free_content_back, ci.canonical_form,
                d.langid as lang_id, d.definition, d.notes,
                v.valsiid, v.word, u.username,
                c.collection_id,
@@ -2118,6 +2151,7 @@ pub async fn search_items(
             script: row.get("script"),
             is_original: row.get("is_original"),
             has_back_image: row.get("has_back_image"),
+            canonical_form: row.get("canonical_form"),
             flashcard: None,
         })
         .collect();

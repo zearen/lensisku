@@ -56,6 +56,10 @@ build:
 	@echo "$(CYAN)Rebuilding Docker images...$(NC)"
 	$(DC) -f $(DC_FILE) build --no-cache
 
+# Check for errors in the code
+check:
+	CXXFLAGS="-std=c++17" cargo check
+
 # Run backend development server
 back:
 	make up

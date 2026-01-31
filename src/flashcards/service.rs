@@ -31,6 +31,7 @@ async fn get_flashcard(
     let row = transaction
         .query_one(
             "SELECT f.*, ci.definition_id, ci.free_content_front, ci.free_content_back, ci.notes,
+                    ci.canonical_form,
                     d.definition, d.langid as definition_language_id,
                     v.word,
                     EXISTS(SELECT 1 FROM collection_item_images WHERE item_id = ci.item_id AND side = 'front') as has_front_image,
@@ -61,6 +62,7 @@ async fn get_flashcard(
         position: row.get("position"),
         definition_language_id: row.get("definition_language_id"),
         sound_url: None,
+        canonical_form: row.get("canonical_form"),
         created_at: row.get("created_at"),
         question_text: None, // Will be populated later if it's a quiz
         quiz_options: None,  // Will be populated later if it's a quiz
@@ -96,7 +98,40 @@ pub async fn create_flashcard(
         )
         .await?
     {
-        Some(row) => row.get(0),
+        Some(row) => {
+            let item_id: i32 = row.get(0);
+            // Ensure canonical_form is updated if missing (backfill)
+            let existing_canon: Option<String> = transaction
+                .query_one("SELECT canonical_form FROM collection_items WHERE item_id = $1", &[&item_id])
+                .await?
+                .get(0);
+
+            if existing_canon.is_none() {
+                let canon = if let Some(front) = &req.free_content_front {
+                    crate::tersmu::get_canonical_form(front)
+                } else if let Some(def_id) = req.definition_id {
+                    // Fetch word for dictionary items
+                    let word_row = transaction.query_opt(
+                        "SELECT v.word FROM definitions d JOIN valsi v ON d.valsiid = v.valsiid WHERE d.definitionid = $1",
+                        &[&def_id]
+                    ).await?;
+                    word_row.and_then(|r| {
+                        let word: String = r.get(0);
+                        crate::tersmu::get_canonical_form(&word)
+                    })
+                } else {
+                    None
+                };
+
+                if let Some(canon_val) = canon {
+                    transaction.execute(
+                        "UPDATE collection_items SET canonical_form = $1 WHERE item_id = $2",
+                        &[&canon_val, &item_id]
+                    ).await?;
+                }
+            }
+            item_id
+        },
         None => {
             let max_position: i32 = transaction
                 .query_one(
@@ -106,14 +141,17 @@ pub async fn create_flashcard(
                 .await?
                 .get(0);
 
+            let canonical_form = req.free_content_front.as_ref()
+                .and_then(|front| crate::tersmu::get_canonical_form(front));
+
             transaction
                 .query_one(
                     "INSERT INTO collection_items (
                         collection_id, definition_id,
                         free_content_front, free_content_back,
-                        notes, position
+                        notes, position, canonical_form
                     )
-                    VALUES ($1, $2, $3, $4, $5, $6)
+                    VALUES ($1, $2, $3, $4, $5, $6, $7)
                     RETURNING item_id",
                     &[
                         &collection_id,
@@ -122,6 +160,7 @@ pub async fn create_flashcard(
                         &req.free_content_back,
                         &req.notes,
                         &(max_position + 1),
+                        &canonical_form,
                     ],
                 )
                 .await?
@@ -134,7 +173,7 @@ pub async fn create_flashcard(
         .query_opt(
             "SELECT f.id, f.created_at, ci.notes, f.direction,
                     f.position, ci.definition_id,
-                    ci.free_content_front, ci.free_content_back,
+                    ci.free_content_front, ci.free_content_back, ci.canonical_form,
                     v.word, d.definition
              FROM flashcards f
              JOIN collection_items ci ON f.item_id = ci.item_id
@@ -165,6 +204,7 @@ pub async fn create_flashcard(
             question_text: None,
             quiz_options: None,
             sound_url: None,
+            canonical_form: row.get("canonical_form"),
         };
 
         let progress = get_all_progress(&transaction, user_id, flashcard.id).await?;
@@ -559,6 +599,7 @@ pub async fn list_flashcards(
         )
         SELECT f.*, p.*, ci.definition_id,
                ci.item_id, ci.free_content_front, ci.free_content_back, ci.notes,
+               ci.canonical_form,
                d.langid as definition_language_id,
                v.word, d.definition,
                EXISTS(SELECT 1 FROM collection_item_images WHERE item_id = ci.item_id AND side = 'front') as has_front_image,
@@ -768,6 +809,7 @@ pub async fn list_flashcards(
                         has_back_image: row.get("has_back_image"),
                         item_id: row.get("item_id"),
                         sound_url: sound_url.clone(),
+                        canonical_form: row.get("canonical_form"),
                         question_text: question_text.clone(), // Use cloned quiz data
                         quiz_options: quiz_options.clone(),
                     },
@@ -828,6 +870,7 @@ pub async fn list_flashcards(
                     sound_url, // Add sound_url
                     question_text,
                     quiz_options,
+                    canonical_form: row.get("canonical_form"),
                 },
                 progress: vec![progress],
             };
@@ -2839,7 +2882,7 @@ async fn get_level_cards(
         .query(
             "SELECT f.id, ci.item_id, ci.definition_id, fli.position,
                 v.word, v.valsiid, d.definition, d.definitionid, ci.notes as ci_notes,
-                ci.free_content_front, ci.free_content_back,
+                ci.free_content_front, ci.free_content_back, ci.canonical_form,
                 EXISTS(SELECT 1 FROM collection_item_images cii WHERE cii.item_id = ci.item_id AND cii.side = 'front') as has_front_image,
                 EXISTS(SELECT 1 FROM collection_item_images cii WHERE cii.item_id = ci.item_id AND cii.side = 'back') as has_back_image,
                 COUNT(CASE WHEN frh.rating >= 3 THEN 1 END) as correct_answers,
@@ -2855,7 +2898,7 @@ async fn get_level_cards(
              AND frh.user_id = $2
          WHERE fli.level_id = $1
          GROUP BY f.id, ci.item_id, fli.position, v.word, d.definition, v.valsiid, d.definitionid,
-                  ci.free_content_front, ci.free_content_back
+                  ci.free_content_front, ci.free_content_back, ci.canonical_form
          ORDER BY fli.position",
             &[&level_id, &user_id],
         )
@@ -2892,6 +2935,7 @@ async fn get_level_cards(
             definition_id: row.get("definitionid"),
             valsi_id: row.get("valsiid"),
             ci_notes: row.get("ci_notes"),
+            canonical_form: row.get("canonical_form"),
             progress,
         });
     }
@@ -3005,7 +3049,7 @@ pub async fn get_level_cards_paginated(
         .query(
             "SELECT f.id, ci.item_id, ci.definition_id, fli.position,
                 v.word, v.valsiid, d.definition, d.definitionid, ci.notes as ci_notes,
-                ci.free_content_front, ci.free_content_back,
+                ci.free_content_front, ci.free_content_back, ci.canonical_form,
                 EXISTS(SELECT 1 FROM collection_item_images cii WHERE cii.item_id = ci.item_id AND cii.side = 'front') as has_front_image,
                 EXISTS(SELECT 1 FROM collection_item_images cii WHERE cii.item_id = ci.item_id AND cii.side = 'back') as has_back_image,
                 COUNT(CASE WHEN frh.rating >= 3 THEN 1 END) as correct_answers,
@@ -3021,7 +3065,7 @@ pub async fn get_level_cards_paginated(
                 AND frh.user_id = $1
             WHERE fli.level_id = $2
             GROUP BY f.id, ci.item_id, fli.position, v.word, d.definition, v.valsiid, d.definitionid,
-                    ci.free_content_front, ci.free_content_back
+                    ci.free_content_front, ci.free_content_back, ci.canonical_form
             ORDER BY fli.position
             LIMIT $3 OFFSET $4",
             &[&user_id, &level_id, &per_page, &offset],
@@ -3062,6 +3106,7 @@ pub async fn get_level_cards_paginated(
                 has_back_image: row.get("has_back_image"),
                 item_id: row.get("item_id"),
                 ci_notes: row.get("ci_notes"),
+                canonical_form: row.get("canonical_form"),
                 progress,
             }
         })

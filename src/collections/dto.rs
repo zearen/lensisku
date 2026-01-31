@@ -116,6 +116,7 @@ pub struct FlashcardResponse {
     pub direction: Option<String>,
     #[schema(value_type = String, format = DateTime)]
     pub created_at: DateTime<Utc>,
+    pub canonical_form: Option<String>,
 }
 
 #[derive(Debug, Serialize, ToSchema)]
@@ -142,6 +143,7 @@ pub struct CollectionItemResponse {
     pub has_back_image: bool,
     #[schema(value_type = String, format = DateTime)]
     pub added_at: DateTime<Utc>,
+    pub canonical_form: Option<String>,
     pub flashcard: Option<FlashcardResponse>,
 }
 

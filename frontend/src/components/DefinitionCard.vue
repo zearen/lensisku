@@ -113,6 +113,12 @@
               </div>
             </div>
 
+            <!-- Canonical Form -->
+            <div v-if="(flashcard && flashcard.canonical_form) || (definition && definition.canonical_form)"
+                 class="mt-1 text-sm text-gray-500 font-mono">
+              {{ (flashcard && flashcard.canonical_form) || definition.canonical_form }}
+            </div>
+
             <!-- Metadata Row -->
             <div class="flex flex-wrap items-center gap-2 mt-1 text-sm text-gray-500">
               <span v-if="definition.definitionid && definition.langid" class="italic text-gray-600">

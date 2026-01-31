@@ -125,6 +125,7 @@ pub struct Flashcard {
     pub definition_language_id: Option<i32>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub sound_url: Option<String>,
+    pub canonical_form: Option<String>,
     #[schema(value_type = String, format = DateTime)]
     pub created_at: DateTime<Utc>,
     // Fields for Quiz type
@@ -268,6 +269,7 @@ pub struct LevelCardResponse {
     pub definition_id: Option<i32>,
     pub valsi_id: Option<i32>,
     pub ci_notes: Option<String>,
+    pub canonical_form: Option<String>,
     pub progress: Option<LevelCardProgress>,
 }
 
