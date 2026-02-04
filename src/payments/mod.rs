@@ -5,7 +5,6 @@ pub mod service;
 
 use actix_web::web;
 use async_trait::async_trait;
-use serde::{Deserialize, Serialize};
 
 mod error;
 #[async_trait]
@@ -18,19 +17,6 @@ pub trait PaymentProvider: Send + Sync {
         transmission_time: &str,
         cert_url: &str,
     ) -> Result<bool, Box<dyn std::error::Error + Send + Sync>>;
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-pub struct PaymentResponse {
-    pub payment_id: String,
-    pub redirect_url: String,
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-pub struct PaymentStatus {
-    pub status: String,
-    pub amount_cents: u64,
-    pub currency: String,
 }
 
 pub fn configure(cfg: &mut web::ServiceConfig) {

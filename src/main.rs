@@ -1,3 +1,5 @@
+#![deny(dead_code)]
+
 use dotenvy::dotenv;
 use env_logger::Env;
 use log::{error, info, warn};
