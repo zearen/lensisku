@@ -10,6 +10,7 @@ pub fn configure(cfg: &mut web::ServiceConfig) {
     cfg.service(
         web::scope("collections")
             .service(controller::list_public_collections)
+            .service(controller::export_collection_full)
             .service(controller::get_collection)
             .service(controller::list_collection_items)
             .service(controller::get_item_image)
@@ -29,7 +30,8 @@ pub fn configure(cfg: &mut web::ServiceConfig) {
                     .service(controller::merge_collections)
                     .service(controller::update_item_images)
                     .service(controller::import_json)
-                    .service(controller::import_collection_from_json), // This registration is now correct
+                    .service(controller::import_collection_from_json)
+                    .service(controller::import_full),
             ),
     );
 }

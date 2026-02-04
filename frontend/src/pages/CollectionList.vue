@@ -49,12 +49,15 @@
     <h2 class="text-xl sm:text-2xl font-bold text-gray-800">
       {{ viewMode !== 'my' ? t('collectionList.publicCollections') : t('collectionList.myCollections') }}
     </h2>
-    <div class="flex flex-row gap-2 justify-end flex-grow">
+    <div class="flex flex-row gap-2 justify-end flex-grow flex-wrap">
       <label v-if="auth.state.isLoggedIn" :class="[viewMode === 'my' ? ' btn-aqua-slate' : 'btn-aqua-white']">
         <input type="checkbox" class="checkmark-aqua" :checked="viewMode === 'my'"
           @click="viewMode = viewMode === 'my' ? 'public' : 'my'">
         <span> {{ t('collectionList.myCollectionsLabel') }} </span>
       </label>
+      <input ref="importFileInput" type="file" accept=".json" class="hidden" @change="handleImportFile">
+      <IconButton v-if="auth.state.isLoggedIn" :label="t('collectionList.importCollection')"
+        button-classes="btn-aqua-sky flex-grow" :disabled="isImporting" @click="triggerImport" />
       <IconButton v-if="auth.state.isLoggedIn" :label="t('collectionList.createCollection')"
         button-classes="btn-aqua-emerald flex-grow" @click="showCreateModal = true" />
     </div>
@@ -178,6 +181,7 @@ import {
   getCollections,
   getPublicCollections,
   createCollection,
+  importCollectionFull,
   getStreak,
 } from '@/api'
 import IconButton from '@/components/icons/IconButton.vue'
@@ -195,6 +199,8 @@ const isLoading = ref(true)
 const viewMode = ref(auth.state.isLoggedIn ? 'my' : 'public')
 const showCreateModal = ref(false)
 const isSubmitting = ref(false)
+const importFileInput = ref(null)
+const isImporting = ref(false)
 const streakData = ref(null)
 const isLoadingStreak = ref(false)
 
@@ -264,6 +270,47 @@ const formatDate = (date) => {
     month: 'short',
     day: 'numeric',
   })
+}
+
+const triggerImport = () => {
+  importFileInput.value?.click()
+}
+
+const handleImportFile = async (event) => {
+  const file = event.target.files?.[0]
+  if (!file) return
+
+  isImporting.value = true
+  try {
+    const fileContent = await file.text()
+    const jsonData = JSON.parse(fileContent)
+
+    if (!jsonData.collection || !Array.isArray(jsonData.items)) {
+      alert(t('collectionList.importFullFormatError', 'Use a full collection export file (JSON with collection, items, and optionally levels).'))
+      return
+    }
+
+    const payload = {
+      collection: {
+        name: jsonData.collection.name,
+        description: jsonData.collection.description ?? null,
+        is_public: jsonData.collection.is_public ?? true,
+      },
+      items: jsonData.items,
+      levels: Array.isArray(jsonData.levels) ? jsonData.levels : [],
+    }
+
+    const response = await importCollectionFull(payload)
+    const { collection: newCollection } = response.data
+    collections.value.unshift(newCollection)
+    router.push(`/collections/${newCollection.collection_id}`)
+  } catch (error) {
+    console.error('Import failed:', error)
+    alert(error.response?.data?.error || t('collectionList.importError', 'Import failed'))
+  } finally {
+    isImporting.value = false
+    event.target.value = ''
+  }
 }
 
 // Watch for view mode changes

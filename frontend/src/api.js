@@ -293,6 +293,13 @@ export const exportDictionary = (language, params) =>
     timeout: 300000, // 5 minutes for large exports
   })
 
+/** Full collection export: GET /collections/{id}/export (collection + items + levels + flashcard directions) */
+export const exportCollectionFull = (collectionId) =>
+  api.get(`/collections/${collectionId}/export`, { timeout: 300000 })
+
+/** Full import: POST /collections/import/full — creates new collection with items, flashcards, and levels */
+export const importCollectionFull = (data) => api.post('/collections/import/full', data)
+
 export const listCachedExports = () => api.get('/export/cached')
 
 export const downloadCachedExport = (languageTag, format) =>

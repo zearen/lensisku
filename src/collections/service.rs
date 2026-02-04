@@ -653,6 +653,442 @@ pub async fn import_collection_from_json(
     })
 }
 
+/// Parse direction string from export; defaults to Both if missing or invalid.
+fn parse_export_direction(s: Option<&String>) -> FlashcardDirection {
+    let s = match s {
+        Some(x) => x.to_lowercase(),
+        None => return FlashcardDirection::Both,
+    };
+    match s.as_str() {
+        "direct" => FlashcardDirection::Direct,
+        "reverse" => FlashcardDirection::Reverse,
+        "both" => FlashcardDirection::Both,
+        "fillin" => FlashcardDirection::FillIn,
+        "fillin_reverse" => FlashcardDirection::FillInReverse,
+        "fillin_both" => FlashcardDirection::FillInBoth,
+        "just_information" => FlashcardDirection::JustInformation,
+        "quiz_direct" => FlashcardDirection::QuizDirect,
+        "quiz_reverse" => FlashcardDirection::QuizReverse,
+        "quiz_both" => FlashcardDirection::QuizBoth,
+        _ => FlashcardDirection::Both,
+    }
+}
+
+/// Full import: create collection, items, then (if levels present) flashcards and levels.
+pub async fn import_full(
+    pool: &Pool,
+    user_id: i32,
+    req: &ImportFullRequest,
+) -> AppResult<ImportFullResponse> {
+    let mut client = pool
+        .get()
+        .await
+        .map_err(|e| AppError::Database(e.to_string()))?;
+    let transaction = client
+        .transaction()
+        .await
+        .map_err(|e| AppError::Database(e.to_string()))?;
+
+    let sanitized_name = sanitize_html(&req.collection.name);
+    let sanitized_description = req.collection.description.as_ref().map(|d| sanitize_html(d));
+    let is_public = req.collection.is_public.unwrap_or(true);
+
+    let row = transaction
+        .query_one(
+            "INSERT INTO collections (user_id, name, description, is_public)
+             VALUES ($1, $2, $3, $4)
+             RETURNING collection_id, created_at, updated_at",
+            &[&user_id, &sanitized_name, &sanitized_description, &is_public],
+        )
+        .await
+        .map_err(|e| AppError::Database(e.to_string()))?;
+
+    let collection_id: i32 = row.get("collection_id");
+    let mut imported_count = 0i32;
+    let mut skipped_count = 0i32;
+    let mut warnings: Vec<String> = Vec::new();
+    // For each export index, Some(item_id) if we inserted that item, None if skipped
+    let mut inserted_item_ids_by_export_index: Vec<Option<i32>> = Vec::with_capacity(req.items.len());
+
+    for (pos, item) in req.items.iter().enumerate() {
+        let has_definition = item.definition_id.is_some();
+        let has_free_content =
+            item.free_content_front.is_some() && item.free_content_back.is_some();
+
+        if !has_definition && !has_free_content {
+            warnings.push(format!(
+                "Item at position {}: missing definition_id and free content, skipped",
+                pos
+            ));
+            skipped_count += 1;
+            inserted_item_ids_by_export_index.push(None);
+            continue;
+        }
+
+        if has_definition {
+            let def_id = item.definition_id.unwrap();
+            let exists = transaction
+                .query_one(
+                    "SELECT EXISTS(SELECT 1 FROM definitions WHERE definitionid = $1)",
+                    &[&def_id],
+                )
+                .await
+                .map_err(|e| AppError::Database(e.to_string()))?
+                .try_get::<_, bool>(0)
+                .map_err(|e| AppError::Database(e.to_string()))?;
+            if !exists {
+                warnings.push(format!(
+                    "Definition ID {} not found for word '{:?}', skipped",
+                    def_id, item.word
+                ));
+                skipped_count += 1;
+                inserted_item_ids_by_export_index.push(None);
+                continue;
+            }
+        }
+
+        let sanitized_front = item.free_content_front.as_ref().map(|f| sanitize_html(f));
+        let sanitized_back = item.free_content_back.as_ref().map(|b| sanitize_html(b));
+        let sanitized_note = item.collection_note.as_ref().map(|n| sanitize_html(n));
+        let canonical_form = sanitized_front
+            .as_ref()
+            .and_then(|f| crate::tersmu::get_canonical_form(f))
+            .or_else(|| item.word.as_ref().and_then(|w| crate::tersmu::get_canonical_form(w)));
+
+        let new_item_id: i32 = transaction
+            .query_one(
+                "INSERT INTO collection_items (collection_id, definition_id, free_content_front, free_content_back, notes, position, canonical_form)
+                 VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING item_id",
+                &[
+                    &collection_id,
+                    &item.definition_id,
+                    &sanitized_front,
+                    &sanitized_back,
+                    &sanitized_note,
+                    &(pos as i32),
+                    &canonical_form,
+                ],
+            )
+            .await
+            .map_err(|e| AppError::Database(e.to_string()))?
+            .try_get(0)
+            .map_err(|e| AppError::Database(e.to_string()))?;
+
+        for (side, url_option) in [
+            ("front", &item.front_image_url),
+            ("back", &item.back_image_url),
+        ] {
+            if let Some(url) = url_option {
+                if let Ok((mime_type, image_data)) = decode_data_url(url) {
+                    if image_data.len() <= 5 * 1024 * 1024 {
+                        let _ = transaction
+                            .execute(
+                                "INSERT INTO collection_item_images (item_id, image_data, mime_type, side) VALUES ($1, $2, $3, $4)",
+                                &[&new_item_id, &image_data, &mime_type, &side],
+                            )
+                            .await;
+                    }
+                }
+            }
+        }
+
+        inserted_item_ids_by_export_index.push(Some(new_item_id));
+        imported_count += 1;
+    }
+
+    let mut levels_created = 0i32;
+    if !req.levels.is_empty() {
+        // For each export index, Some(flashcard_id) if we have a flashcard for that item, None if skipped
+        let mut flashcard_id_by_export_index: Vec<Option<i32>> =
+            Vec::with_capacity(inserted_item_ids_by_export_index.len());
+        for (idx, item_id_opt) in inserted_item_ids_by_export_index.iter().enumerate() {
+            let flashcard_id_opt = match *item_id_opt {
+                Some(item_id) => {
+                    let direction = parse_export_direction(req.items.get(idx).and_then(|i| i.direction.as_ref()));
+                    let flashcard_id: i32 = transaction
+                .query_one(
+                    "INSERT INTO flashcards (collection_id, position, item_id, direction)
+                     VALUES ($1, $2, $3, $4)
+                     RETURNING id",
+                    &[
+                        &collection_id,
+                        &(idx as i32),
+                        &item_id,
+                        &direction,
+                    ],
+                )
+                .await
+                .map_err(|e| AppError::Database(e.to_string()))?
+                .try_get(0)
+                .map_err(|e| AppError::Database(e.to_string()))?;
+                    initialize_flashcard_progress(&transaction, user_id, flashcard_id, "direct").await?;
+                    initialize_flashcard_progress(&transaction, user_id, flashcard_id, "reverse").await?;
+                    Some(flashcard_id)
+                }
+                None => None,
+            };
+            flashcard_id_by_export_index.push(flashcard_id_opt);
+        }
+
+        let mut new_level_ids: Vec<i32> = Vec::with_capacity(req.levels.len());
+        for level in &req.levels {
+            let level_id: i32 = transaction
+                .query_one(
+                    "INSERT INTO flashcard_levels (collection_id, name, description, min_cards, min_success_rate, position)
+                     VALUES ($1, $2, $3, $4, $5, $6)
+                     RETURNING level_id",
+                    &[
+                        &collection_id,
+                        &level.name,
+                        &level.description,
+                        &level.min_cards,
+                        &(level.min_success_rate as f64),
+                        &level.position,
+                    ],
+                )
+                .await
+                .map_err(|e| AppError::Database(e.to_string()))?
+                .try_get(0)
+                .map_err(|e| AppError::Database(e.to_string()))?;
+            new_level_ids.push(level_id);
+            levels_created += 1;
+        }
+
+        for (level_idx, level) in req.levels.iter().enumerate() {
+            let level_id = new_level_ids[level_idx];
+            for &prereq_idx in &level.prerequisite_positions {
+                if prereq_idx < new_level_ids.len() {
+                    let prereq_id = new_level_ids[prereq_idx];
+                    if level_id != prereq_id {
+                        let _ = transaction
+                            .execute(
+                                "INSERT INTO level_prerequisites (level_id, prerequisite_id) VALUES ($1, $2)
+                                 ON CONFLICT (level_id, prerequisite_id) DO NOTHING",
+                                &[&level_id, &prereq_id],
+                            )
+                            .await;
+                    }
+                }
+            }
+            for (pos_in_level, &item_idx) in level.item_positions.iter().enumerate() {
+                if let Some(Some(flashcard_id)) = flashcard_id_by_export_index.get(item_idx) {
+                    let _ = transaction
+                        .execute(
+                            "INSERT INTO flashcard_level_items (level_id, flashcard_id, position)
+                             VALUES ($1, $2, $3)
+                             ON CONFLICT (level_id, flashcard_id) DO UPDATE SET position = EXCLUDED.position",
+                            &[&level_id, &flashcard_id, &(pos_in_level as i32)],
+                        )
+                        .await;
+                }
+            }
+        }
+    }
+
+    let username: String = transaction
+        .query_one("SELECT username FROM users WHERE userid = $1", &[&user_id])
+        .await
+        .map_err(|e| AppError::Database(e.to_string()))?
+        .try_get("username")
+        .map_err(|e| AppError::Database(e.to_string()))?;
+
+    let collection_resp = CollectionResponse {
+        collection_id,
+        name: sanitized_name,
+        description: sanitized_description,
+        is_public,
+        created_at: row.get("created_at"),
+        updated_at: row.get("updated_at"),
+        item_count: imported_count as i64,
+        owner: CollectionOwner {
+            user_id,
+            username,
+        },
+    };
+
+    transaction
+        .commit()
+        .await
+        .map_err(|e| AppError::Database(e.to_string()))?;
+
+    Ok(ImportFullResponse {
+        collection: collection_resp,
+        imported_count,
+        skipped_count,
+        levels_created,
+        warnings,
+    })
+}
+
+/// Full collection export: collection metadata, items (with flashcard direction when present), and levels.
+pub async fn export_collection_full(
+    pool: &Pool,
+    collection_id: i32,
+    user_id: Option<i32>,
+) -> AppResult<CollectionFullExport> {
+    let collection_resp = get_collection(pool, collection_id, user_id).await?;
+    let collection_meta = CollectionExportMeta {
+        name: collection_resp.name,
+        description: collection_resp.description,
+        is_public: Some(collection_resp.is_public),
+    };
+
+    let client = pool
+        .get()
+        .await
+        .map_err(|e| AppError::Database(e.to_string()))?;
+
+    let item_rows = client
+        .query(
+            "SELECT
+                ci.item_id, ci.definition_id, ci.notes as collection_note, ci.position,
+                ci.free_content_front, ci.free_content_back,
+                ci.langid as language_id, ci.owner_user_id, ci.license,
+                v.word, d.definition, d.notes as definition_notes, d.jargon, t.descriptor as word_type,
+                c.rafsi, c.selmaho,
+                (SELECT image_data FROM collection_item_images WHERE item_id = ci.item_id AND side = 'front') as front_image_data,
+                (SELECT mime_type FROM collection_item_images WHERE item_id = ci.item_id AND side = 'front') as front_image_mime,
+                (SELECT image_data FROM collection_item_images WHERE item_id = ci.item_id AND side = 'back') as back_image_data,
+                (SELECT mime_type FROM collection_item_images WHERE item_id = ci.item_id AND side = 'back') as back_image_mime,
+                f.direction::text as flashcard_direction
+            FROM collection_items ci
+            LEFT JOIN definitions d ON ci.definition_id = d.definitionid
+            LEFT JOIN valsi v ON d.valsiid = v.valsiid
+            LEFT JOIN valsitypes t ON v.typeid = t.typeid
+            LEFT JOIN convenientdefinitions c ON c.definitionid = d.definitionid
+            LEFT JOIN flashcards f ON f.item_id = ci.item_id AND f.collection_id = ci.collection_id
+            WHERE ci.collection_id = $1
+            ORDER BY ci.position",
+            &[&collection_id],
+        )
+        .await
+        .map_err(|e| AppError::Database(e.to_string()))?;
+
+    let mut item_id_to_index: std::collections::HashMap<i32, usize> = std::collections::HashMap::new();
+    let items: Vec<CollectionExportItem> = item_rows
+        .iter()
+        .enumerate()
+        .map(|(idx, row)| {
+            let item_id: i32 = row.get("item_id");
+            item_id_to_index.insert(item_id, idx);
+            let front_image_url = row
+                .get::<_, Option<Vec<u8>>>("front_image_data")
+                .and_then(|data| {
+                    row.get::<_, Option<String>>("front_image_mime")
+                        .map(|mime| format!("data:{};base64,{}", mime, BASE64.encode(&data)))
+                });
+            let back_image_url = row
+                .get::<_, Option<Vec<u8>>>("back_image_data")
+                .and_then(|data| {
+                    row.get::<_, Option<String>>("back_image_mime")
+                        .map(|mime| format!("data:{};base64,{}", mime, BASE64.encode(&data)))
+                });
+            let direction: Option<String> = row.get("flashcard_direction");
+            CollectionExportItem {
+                item_id: row.get("item_id"),
+                position: row.get("position"),
+                collection_note: row.get("collection_note"),
+                definition_id: row.get("definition_id"),
+                language_id: row.get("language_id"),
+                owner_user_id: row.get("owner_user_id"),
+                license: row.get("license"),
+                word: row.get("word"),
+                word_type: row.get("word_type"),
+                rafsi: row.get("rafsi"),
+                selmaho: row.get("selmaho"),
+                definition: row.get("definition"),
+                definition_notes: row.get("definition_notes"),
+                jargon: row.get("jargon"),
+                free_content_front: row.get("free_content_front"),
+                free_content_back: row.get("free_content_back"),
+                front_image_url,
+                back_image_url,
+                direction,
+            }
+        })
+        .collect();
+
+    let level_rows = client
+        .query(
+            "SELECT level_id, name, description, min_cards, min_success_rate, position
+             FROM flashcard_levels
+             WHERE collection_id = $1
+             ORDER BY position",
+            &[&collection_id],
+        )
+        .await
+        .map_err(|e| AppError::Database(e.to_string()))?;
+
+    let level_ids: Vec<i32> = level_rows.iter().map(|r| r.get("level_id")).collect();
+    let level_id_to_index: std::collections::HashMap<i32, usize> = level_ids
+        .iter()
+        .enumerate()
+        .map(|(i, &id)| (id, i))
+        .collect();
+
+    let mut levels: Vec<LevelExport> = Vec::with_capacity(level_rows.len());
+    for row in &level_rows {
+        let level_id: i32 = row.get("level_id");
+        let prerequisite_ids: Vec<i32> = client
+            .query(
+                "SELECT prerequisite_id FROM level_prerequisites WHERE level_id = $1",
+                &[&level_id],
+            )
+            .await
+            .map_err(|e| AppError::Database(e.to_string()))?
+            .iter()
+            .map(|r| r.get::<_, i32>("prerequisite_id"))
+            .collect();
+        let prerequisite_positions: Vec<usize> = prerequisite_ids
+            .iter()
+            .filter_map(|&pid| level_id_to_index.get(&pid).copied())
+            .collect();
+
+        let fli_rows = client
+            .query(
+                "SELECT fli.flashcard_id, fli.position
+                 FROM flashcard_level_items fli
+                 WHERE fli.level_id = $1
+                 ORDER BY fli.position",
+                &[&level_id],
+            )
+            .await
+            .map_err(|e| AppError::Database(e.to_string()))?;
+
+        let mut item_positions_for_level: Vec<usize> = Vec::with_capacity(fli_rows.len());
+        for fli_row in &fli_rows {
+            let flashcard_id: i32 = fli_row.get("flashcard_id");
+            let item_id: i32 = client
+                .query_one(
+                    "SELECT item_id FROM flashcards WHERE id = $1",
+                    &[&flashcard_id],
+                )
+                .await
+                .map_err(|e| AppError::Database(e.to_string()))?
+                .get("item_id");
+            if let Some(&idx) = item_id_to_index.get(&item_id) {
+                item_positions_for_level.push(idx);
+            }
+        }
+
+        levels.push(LevelExport {
+            name: row.get("name"),
+            description: row.get("description"),
+            min_cards: row.get("min_cards"),
+            min_success_rate: row.get::<_, f64>("min_success_rate") as f32,
+            position: row.get("position"),
+            prerequisite_positions,
+            item_positions: item_positions_for_level,
+        });
+    }
+
+    Ok(CollectionFullExport {
+        collection: collection_meta,
+        items,
+        levels,
+    })
+}
+
 // Helper function to initialize flashcard progress
 async fn initialize_flashcard_progress(
     transaction: &Transaction<'_>,

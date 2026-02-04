@@ -883,6 +883,7 @@ impl CollectionExportItem {
             free_content_back: row.get("free_content_back"),
             front_image_url,
             back_image_url,
+            direction: None, // only set in full collection export
         }
     }
 }

@@ -675,6 +675,72 @@ pub async fn import_collection_from_json(
 
 #[utoipa::path(
     get,
+    path = "/collections/{id}/export",
+    tag = "collections",
+    params(
+        ("id" = i32, Path, description = "Collection ID")
+    ),
+    responses(
+        (status = 200, description = "Full collection export (items, levels, flashcard directions)", body = CollectionFullExport),
+        (status = 403, description = "Access denied"),
+        (status = 404, description = "Collection not found"),
+        (status = 500, description = "Internal server error")
+    ),
+    security(("bearer_auth" = [])),
+    summary = "Export collection full",
+    description = "Exports the collection as JSON including collection metadata, all items (with optional flashcard direction), and all flashcard levels with their params and item assignments. Same access as get collection (public or owner)."
+)]
+#[get("/{id}/export")]
+pub async fn export_collection_full(
+    pool: web::Data<Pool>,
+    claims: Option<Claims>,
+    id: web::Path<i32>,
+) -> impl Responder {
+    match service::export_collection_full(&pool, id.into_inner(), claims.map(|c| c.sub)).await {
+        Ok(export) => HttpResponse::Ok().json(export),
+        Err(e) => {
+            let msg = e.to_string();
+            if msg.contains("Access denied") || msg.contains("Unauthorized") {
+                HttpResponse::Forbidden().finish()
+            } else {
+                HttpResponse::InternalServerError().json(json!({
+                    "error": format!("Failed to export collection: {}", e)
+                }))
+            }
+        }
+    }
+}
+
+#[utoipa::path(
+    post,
+    path = "/collections/import/full",
+    tag = "collections",
+    request_body = ImportFullRequest,
+    responses(
+        (status = 200, description = "Collection imported with items and optionally flashcards/levels", body = ImportFullResponse),
+        (status = 400, description = "Invalid request"),
+        (status = 500, description = "Internal server error")
+    ),
+    security(("bearer_auth" = [])),
+    summary = "Import full collection",
+    description = "Creates a new collection from a full export JSON (collection metadata, items, optional levels). When levels are present, flashcards are created for each item and levels with prerequisites and card assignments are recreated."
+)]
+#[post("/import/full")]
+pub async fn import_full(
+    pool: web::Data<Pool>,
+    claims: Claims,
+    req: web::Json<ImportFullRequest>,
+) -> impl Responder {
+    match service::import_full(&pool, claims.sub, &req).await {
+        Ok(response) => HttpResponse::Ok().json(response),
+        Err(e) => HttpResponse::InternalServerError().json(json!({
+            "error": format!("Failed to import: {}", e)
+        })),
+    }
+}
+
+#[utoipa::path(
+    get,
     path = "/collections/{collection_id}/search",
     tag = "collections",
     params(

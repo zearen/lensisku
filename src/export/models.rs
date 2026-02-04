@@ -117,6 +117,9 @@ pub struct CollectionExportItem {
     pub front_image_url: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub back_image_url: Option<String>,
+    // Flashcard direction when item has an associated flashcard (full export only)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub direction: Option<String>,
 }
 
 #[derive(Debug)]

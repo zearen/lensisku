@@ -204,3 +204,58 @@ pub struct SkippedItemInfo {
     pub identifier: String, // e.g., definition_id or free_content_front
     pub reason: String,
 }
+
+// Full collection export/import (items + levels + optional flashcards)
+
+#[derive(Debug, Serialize, ToSchema)]
+pub struct CollectionExportMeta {
+    pub name: String,
+    pub description: Option<String>,
+    pub is_public: Option<bool>,
+}
+
+#[derive(Debug, Serialize, ToSchema)]
+pub struct CollectionFullExport {
+    pub collection: CollectionExportMeta,
+    pub items: Vec<CollectionExportItem>,
+    pub levels: Vec<LevelExport>,
+}
+
+#[derive(Debug, Serialize, Deserialize, ToSchema)]
+pub struct LevelExport {
+    pub name: String,
+    pub description: Option<String>,
+    pub min_cards: i32,
+    pub min_success_rate: f32,
+    pub position: i32,
+    /// Indices into the levels array (0-based) for prerequisites
+    #[serde(default)]
+    pub prerequisite_positions: Vec<usize>,
+    /// Indices into the items array for which items' flashcards belong to this level
+    #[serde(default)]
+    pub item_positions: Vec<usize>,
+}
+
+#[derive(Debug, Deserialize, ToSchema)]
+pub struct ImportFullRequest {
+    pub collection: ImportFullCollectionMeta,
+    pub items: Vec<CollectionExportItem>,
+    #[serde(default)]
+    pub levels: Vec<LevelExport>,
+}
+
+#[derive(Debug, Deserialize, ToSchema)]
+pub struct ImportFullCollectionMeta {
+    pub name: String,
+    pub description: Option<String>,
+    pub is_public: Option<bool>,
+}
+
+#[derive(Debug, Serialize, ToSchema)]
+pub struct ImportFullResponse {
+    pub collection: CollectionResponse,
+    pub imported_count: i32,
+    pub skipped_count: i32,
+    pub levels_created: i32,
+    pub warnings: Vec<String>,
+}

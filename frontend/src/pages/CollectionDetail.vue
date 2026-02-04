@@ -55,7 +55,7 @@
             </button>
             <button v-if="isOwner" class="w-full px-4 py-2 text-left text-sm text-cyan-600 hover:bg-cyan-50"
               @click="triggerJsonImport">
-              {{ t('collectionDetail.importJsonButton', 'Import as JSON') }}
+              {{ t('collectionDetail.importFullButton', 'Import from file') }}
             </button>
             <button v-if="isOwner" class="w-full px-4 py-2 text-left text-sm text-red-600 hover:bg-red-50"
               @click="handleDelete">
@@ -188,28 +188,13 @@
       </form>
     </ModalComponent>
 
-    <!-- Export Collection Modal -->
+    <!-- Export Collection Modal (full: items + levels + flashcard directions) -->
     <ModalComponent :show="showExportModal" :title="t('collectionDetail.exportCollectionTitle')"
       @close="showExportModal = false; showActions = !showActions">
       <div class="space-y-4">
-        <div>
-          <label class="block text-sm font-medium text-gray-700">{{ t('collectionDetail.exportFormatLabel') }}</label>
-          <select v-model="exportFormat" class="input-field w-full">
-            <option value="pdf">
-              {{ t('dictionaryExport.formats.pdf.label') }}
-            </option>
-            <option value="latex">
-              {{ t('dictionaryExport.formats.latex.label') }}
-            </option>
-            <option value="json">
-              {{ t('dictionaryExport.formats.json.label') }}
-            </option>
-            <option value="tsv">
-              {{ t('dictionaryExport.formats.tsv.label') }}
-            </option>
-          </select>
-        </div>
-
+        <p class="text-sm text-gray-600">
+          {{ t('collectionDetail.exportFullDescription', 'Exports this collection as JSON including all items, flashcard levels, and flashcard settings. You can re-import the file later to create a new collection with the same structure.') }}
+        </p>
         <div v-if="exportProgress" class="text-sm text-blue-600 mt-2">
           {{ exportProgress }}
         </div>
@@ -758,11 +743,11 @@ import {
   listCollectionItems,
   mergeCollection,
   cloneCollection,
-  importCollectionFromJson,
+  importCollectionFull,
   getCollections as getUserCollections,
   getLanguages,
   updateItemPosition,
-  exportDictionary,
+  exportCollectionFull,
   searchItems,
   getItemImage,
   deleteFlashcard,
@@ -832,7 +817,6 @@ const editingItem = ref(null)
 
 const numericCollectionId = computed(() => Number(props.collectionId))
 
-const exportFormat = ref('pdf')
 const showExportModal = ref(false)
 const isExporting = ref(false)
 const exportError = ref('')
@@ -1162,24 +1146,14 @@ const handleExport = async () => {
   exportProgress.value = 'Preparing export...'
 
   try {
-    exportProgress.value = 'Generating export file...'
-    const params = new URLSearchParams({
-      format: exportFormat.value,
-      collection_id: props.collectionId,
-    }).toString()
-
     exportProgress.value = 'Requesting export...'
-    const response = await exportDictionary('en', params)
-
+    const response = await exportCollectionFull(props.collectionId)
     exportProgress.value = 'Processing response...'
-    // Get filename from Content-Disposition header or generate default
-    const contentDisposition = response.headers?.['content-disposition']
-    const filename = contentDisposition
-      ? contentDisposition.split('filename=')[1].replace(/"/g, '')
-      : `collection-${props.collectionId}.${exportFormat.value}`
 
-    // Create download from blob
-    const url = window.URL.createObjectURL(response.data)
+    const data = response.data
+    const filename = `${(collection.value?.name || 'collection').replace(/[^a-zA-Z0-9-_]/g, '_')}-export.json`
+    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' })
+    const url = window.URL.createObjectURL(blob)
     const a = document.createElement('a')
     a.href = url
     a.download = filename
@@ -1194,15 +1168,7 @@ const handleExport = async () => {
     }, 1000)
   } catch (err) {
     exportProgress.value = ''
-    if (err.response?.data instanceof Blob) {
-      const reader = new FileReader()
-      reader.onload = () => {
-        exportError.value = reader.result
-      }
-      reader.readAsText(err.response.data)
-    } else {
-      exportError.value = err.message || 'Export failed'
-    }
+    exportError.value = err.response?.data?.error || err.message || 'Export failed'
   } finally {
     isExporting.value = false
     showExportModal.value = false
@@ -2018,38 +1984,53 @@ const handleJsonFileSelect = async (event) => {
   if (!file) return
 
   isImportingJson.value = true
-  successMessage.value = '' // Clear previous messages
+  successMessage.value = ''
   clearError()
 
   try {
     const fileContent = await file.text()
     const jsonData = JSON.parse(fileContent)
 
-    // Assuming jsonData is an array of CollectionExportItem
-    const response = await importCollectionFromJson(props.collectionId, { items: jsonData })
+    // Full format: { collection, items, levels? }
+    if (!jsonData.collection || !Array.isArray(jsonData.items)) {
+      showError(t('collectionDetail.importFullFormatError', 'Use a full collection export file (JSON with collection, items, and optionally levels).'))
+      return
+    }
 
-    const { imported_count, skipped_count, skipped_items } = response.data
-    let message = t('collectionDetail.importJsonSuccess', { imported: imported_count, skipped: skipped_count })
-    if (skipped_items && skipped_items.length > 0) {
-      message += `<br/><br/>${t('collectionDetail.skippedItemsHeader')}:<ul>`
-      skipped_items.slice(0, 5).forEach(item => { // Show first 5 skipped
-        message += `<li>${item.identifier}: ${item.reason}</li>`
-      })
-      if (skipped_items.length > 5) message += `<li>... ${t('collectionDetail.andMoreSkipped', { count: skipped_items.length - 5 })}</li>`
-      message += '</ul>'
+    const payload = {
+      collection: {
+        name: jsonData.collection.name,
+        description: jsonData.collection.description ?? null,
+        is_public: jsonData.collection.is_public ?? true,
+      },
+      items: jsonData.items,
+      levels: Array.isArray(jsonData.levels) ? jsonData.levels : [],
+    }
+
+    const response = await importCollectionFull(payload)
+    const { collection: newCollection, imported_count, skipped_count, levels_created, warnings } = response.data
+
+    const message = t('collectionDetail.importFullSuccess', {
+      name: newCollection.name,
+      imported: imported_count,
+      skipped: skipped_count,
+      levels: levels_created,
+    }) || `Created "${newCollection.name}" with ${imported_count} items, ${levels_created} levels.`
+    if (warnings?.length) {
+      message += '<br/><br/>' + warnings.slice(0, 5).join('<br/>')
+      if (warnings.length > 5) message += `<br/>... ${warnings.length - 5} more`
     }
     successMessage.value = message
     showSuccessToast.value = true
     setTimeout(() => {
       showSuccessToast.value = false
-    }, 5000) // Show longer for potentially long messages
-    await fetchItems() // Refresh items list
+    }, 4000)
+    router.push(`/collections/${newCollection.collection_id}`)
   } catch (error) {
-    console.log(error);
-    showError(error.response?.data?.error || t('collectionDetail.importJsonError'))
+    showError(error.response?.data?.error || t('collectionDetail.importJsonError', 'Import failed'))
   } finally {
     isImportingJson.value = false
-    jsonImportInput.value.value = '' // Reset file input
+    jsonImportInput.value.value = ''
   }
 }
 // --- End JSON Import Logic ---
