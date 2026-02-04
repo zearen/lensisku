@@ -1,6 +1,7 @@
--- Fix: In UPDATE ... FROM, the SET clause cannot reference the target table "d"
--- (PostgreSQL restriction). Use CTE to supply definition/notes/selmaho and
--- cached_* so SET never references d.
+-- Fix: Do not reference the UPDATE target table in the FROM clause (including
+-- JOIN conditions). PostgreSQL does not allow the target to appear there.
+-- Rewrite valsi and natlangwords branches to use def_ids/affected CTEs and
+-- join only those to keyword_agg, then WHERE target.definitionid = cte.definitionid.
 
 CREATE OR REPLACE FUNCTION sync_definition_cache_fields()
 RETURNS TRIGGER AS $$
@@ -21,7 +22,6 @@ DECLARE
     d_notes TEXT;
     d_selmaho TEXT;
 BEGIN
-    -- Derive the ids we need based on the triggering table
     IF TG_TABLE_NAME = 'definitions' THEN
         target_definitionid := COALESCE(NEW.definitionid, OLD.definitionid);
         target_valsiid := COALESCE(NEW.valsiid, OLD.valsiid);
@@ -33,7 +33,6 @@ BEGIN
         target_natlangwordid := COALESCE(NEW.wordid, OLD.wordid);
     END IF;
 
-    -- Helper: load keyword aggregates when we have a specific definition id
     IF target_definitionid IS NOT NULL THEN
         SELECT COALESCE(string_agg(LOWER(n.word), ' ' ORDER BY n.word), ''),
                COALESCE(string_agg(LOWER(n.word || ' ' || COALESCE(n.meaning, '')), ' '), '')
@@ -43,7 +42,6 @@ BEGIN
         WHERE k.definitionid = target_definitionid;
     END IF;
 
-    -- Update cached fields for the affected definition(s)
     IF TG_TABLE_NAME = 'definitions' THEN
         SELECT d.definition, d.notes, d.selmaho,
                v.word, v.rafsi, v.source_langid, v.typeid,
@@ -79,7 +77,6 @@ BEGIN
         WHERE definitionid = target_definitionid;
 
     ELSIF TG_TABLE_NAME = 'keywordmapping' THEN
-        -- Update cached_glosswords and cached_search_text when keywords change
         UPDATE definitions d
         SET
             cached_glosswords = kw_gloss,
@@ -94,8 +91,6 @@ BEGIN
         WHERE d.definitionid = target_definitionid;
 
     ELSIF TG_TABLE_NAME = 'valsi' THEN
-        -- Update cached valsi fields and cached_search_text when valsi changes.
-        -- Do not reference the UPDATE target in FROM/JOIN (Postgres rule).
         WITH def_ids AS (
             SELECT definitionid FROM definitions WHERE valsiid = target_valsiid
         ),
@@ -140,19 +135,16 @@ BEGIN
         WHERE definitions.definitionid = def_ids.definitionid;
 
     ELSIF TG_TABLE_NAME = 'users' THEN
-        -- Update cached_username when username changes
         UPDATE definitions d
         SET cached_username = NEW.username
         WHERE d.userid = NEW.userid;
 
     ELSIF TG_TABLE_NAME = 'languages' THEN
-        -- Update cached_langrealname when language name changes
         UPDATE definitions d
         SET cached_langrealname = NEW.realname
         WHERE d.langid = NEW.langid;
 
     ELSIF TG_TABLE_NAME = 'valsitypes' THEN
-        -- Update cached_type_name and cached_typeid when type descriptor changes
         UPDATE definitions d
         SET
             cached_type_name = NEW.descriptor,
@@ -160,8 +152,6 @@ BEGIN
         WHERE d.cached_typeid = NEW.typeid;
 
     ELSIF TG_TABLE_NAME = 'natlangwords' THEN
-        -- Update cached_glosswords and cached_search_text when natlangwords change.
-        -- Do not reference the UPDATE target in FROM/JOIN (Postgres rule).
         WITH affected AS (
             SELECT DISTINCT k.definitionid
             FROM keywordmapping k
