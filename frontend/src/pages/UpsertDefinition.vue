@@ -313,6 +313,17 @@ const auth = useAuth()
 const { showError, clearError } = useError()
 const { t, locale } = useI18n()
 
+/** Format API error for display; e.g. RAFSI_CONFLICT|word|type -> translated message */
+function formatDefinitionError(apiError) {
+  if (typeof apiError === 'string' && apiError.startsWith('RAFSI_CONFLICT|')) {
+    const parts = apiError.split('|')
+    const word = parts[1] ?? ''
+    const type = parts[2] ?? ''
+    return t('upsertDefinition.rafsiConflict', { word, type })
+  }
+  return apiError
+}
+
 // Form state
 const word = ref('')
 const recommended = ref('')
@@ -620,11 +631,11 @@ const submitValsi = async () => {
         router.push(`/valsi/${word.value}?highlight_definition_id=${definitionId}`)
       }, 1500)
     } else {
-      showError(response.data.error || t('upsertDefinition.saveError'))
+      showError(formatDefinitionError(response.data.error) || t('upsertDefinition.saveError'))
       definitionError.value = ''
     }
   } catch (e) {
-    showError(e.response?.data?.error || t('upsertDefinition.saveErrorGeneric'))
+    showError(formatDefinitionError(e.response?.data?.error) || t('upsertDefinition.saveErrorGeneric'))
   } finally {
     isSubmitting.value = false
   }

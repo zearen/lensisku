@@ -1389,7 +1389,7 @@ async fn add_definition_in_transaction(
                          SELECT n.word, n.meaning
                          FROM keywordmapping k
                          JOIN natlangwords n ON k.natlangwordid = n.wordid
-                         WHERE k.definitionid = d.definitionid AND k.place = 0
+                         WHERE k.definitionid = $1 AND k.place = 0
                      ) kw
                     ), '[]'::jsonb
                 ),
@@ -1399,7 +1399,7 @@ async fn add_definition_in_transaction(
                          SELECT n.word, n.meaning, k.place
                          FROM keywordmapping k
                          JOIN natlangwords n ON k.natlangwordid = n.wordid
-                         WHERE k.definitionid = d.definitionid AND k.place > 0
+                         WHERE k.definitionid = $1 AND k.place > 0
                      ) kw
                     ), '[]'::jsonb
                 ),
@@ -1659,7 +1659,7 @@ pub async fn update_definition(
                          SELECT n.word, n.meaning
                          FROM keywordmapping k
                          JOIN natlangwords n ON k.natlangwordid = n.wordid
-                         WHERE k.definitionid = d.definitionid AND k.place = 0
+                         WHERE k.definitionid = $1 AND k.place = 0
                      ) kw
                     ), '[]'::jsonb
                 ),
@@ -1669,7 +1669,7 @@ pub async fn update_definition(
                          SELECT n.word, n.meaning, k.place
                          FROM keywordmapping k
                          JOIN natlangwords n ON k.natlangwordid = n.wordid
-                         WHERE k.definitionid = d.definitionid AND k.place > 0
+                         WHERE k.definitionid = $1 AND k.place > 0
                      ) kw
                     ), '[]'::jsonb
                 ),
@@ -1928,7 +1928,7 @@ pub async fn update_definition(
                     )), '[]'::json)
                     FROM keywordmapping k
                     JOIN natlangwords n ON k.natlangwordid = n.wordid
-                    WHERE k.definitionid = d.definitionid AND k.place = 0
+                    WHERE k.definitionid = $1 AND k.place = 0
                 )::jsonb,
                 (
                     SELECT COALESCE(json_agg(json_build_object(
@@ -1938,7 +1938,7 @@ pub async fn update_definition(
                     ) ORDER BY k.place), '[]'::json)
                     FROM keywordmapping k
                     JOIN natlangwords n ON k.natlangwordid = n.wordid
-                    WHERE k.definitionid = d.definitionid AND k.place > 0
+                    WHERE k.definitionid = $1 AND k.place > 0
                 )::jsonb,
                 $2, 'Updated version'
             FROM definitions d
