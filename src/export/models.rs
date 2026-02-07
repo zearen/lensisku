@@ -75,6 +75,8 @@ pub struct DictionaryEntry {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub notes: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    pub etymology: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub jargon: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub collection_note: Option<String>,

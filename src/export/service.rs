@@ -1619,7 +1619,7 @@ async fn generate_json(
 
     let query = format!(
         "SELECT v.word, vbg.definitionid, c.rafsi, c.selmaho, c.definition,
-                c.notes, d.jargon, t.descriptor{}, u.username, u.realname,
+                c.notes, d.etymology, d.jargon, t.descriptor{}, u.username, u.realname,
                 (SELECT COALESCE(SUM(value), 0) FROM definitionvotes WHERE definitionid = vbg.definitionid) as score
          FROM valsibestguesses vbg
          JOIN valsi v ON v.valsiid = vbg.valsiid
@@ -1662,6 +1662,7 @@ async fn generate_json(
                 selmaho: row.get("selmaho"),
                 definition: row.get("definition"),
                 notes: row.get("notes"),
+                etymology: row.get("etymology"),
                 jargon: row.get("jargon"),
                 collection_note: row.get("collection_note"),
                 score: row.get("score"),
